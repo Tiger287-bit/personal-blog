@@ -1,0 +1,22 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+---
+
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+	</head>
+	<body>
+		<Header />
+		<main>
+			<h1>咸鱼哥知识小库</h1>
+			<p>记录机器人、嵌入式与端侧 AI 的学习与实践。</p>
+			<p><a href="/blog">浏览文章 →</a></p>
+		</main>
+		<Footer />
+	</body>
+</html>

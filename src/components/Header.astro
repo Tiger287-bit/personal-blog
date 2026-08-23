@@ -1,0 +1,77 @@
+---
+import { SITE_TITLE } from '../consts';
+import HeaderLink from './HeaderLink.astro';
+---
+
+<header>
+	<nav>
+		<h2><a class="brand" href="/">{SITE_TITLE}</a></h2>
+
+		<div class="internal-links">
+			<HeaderLink href="/">首页</HeaderLink>
+			<HeaderLink href="/blog">文章</HeaderLink>
+			<HeaderLink href="/about">关于</HeaderLink>
+		</div>
+
+		<a
+			class="github"
+			href="https://github.com/Tiger287-bit"
+			target="_blank"
+			rel="noopener noreferrer"
+		>
+			GitHub
+		</a>
+	</nav>
+</header>
+
+<style>
+	header {
+		padding: 0 1rem;
+		background: white;
+		box-shadow: 0 2px 8px rgba(var(--black), 5%);
+	}
+
+	nav {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	h2 {
+		margin: 0;
+		font-size: 1rem;
+	}
+
+	nav a {
+		padding: 1rem 0.5rem;
+		color: var(--black);
+		text-decoration: none;
+	}
+
+	.brand {
+		padding-left: 0;
+	}
+
+	.internal-links {
+		display: flex;
+	}
+
+	.internal-links a {
+		border-bottom: 4px solid transparent;
+	}
+
+	.internal-links a.active {
+		border-bottom-color: var(--accent);
+	}
+
+	.github {
+		font-size: 0.9rem;
+	}
+
+	@media (max-width: 720px) {
+		.github {
+			display: none;
+		}
+	}
+</style>
