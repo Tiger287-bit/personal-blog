@@ -1,114 +1,374 @@
 ---
-import { Image } from 'astro:assets';
 import { getCollection } from 'astro:content';
 import BaseHead from '../../components/BaseHead.astro';
 import Footer from '../../components/Footer.astro';
 import FormattedDate from '../../components/FormattedDate.astro';
 import Header from '../../components/Header.astro';
-import { SITE_DESCRIPTION, SITE_TITLE } from '../../consts';
+import { SITE_TITLE } from '../../consts';
 
 const posts = (await getCollection('blog')).sort(
 	(a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
 );
+
+const groupedPosts = posts.reduce(
+	(groups, post) => {
+		const category = post.data.category;
+
+		if (!groups[category]) {
+			groups[category] = [];
+		}
+
+		groups[category].push(post);
+		return groups;
+	},
+	{} as Record<string, typeof posts>,
+);
+
+const categoryEntries = Object.entries(groupedPosts);
 ---
 
 <!doctype html>
 <html lang="zh-CN">
 	<head>
-		<BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
-		<style>
-			main {
-				width: 960px;
-			}
-			ul {
-				display: flex;
-				flex-wrap: wrap;
-				gap: 2rem;
-				list-style-type: none;
-				margin: 0;
-				padding: 0;
-			}
-			ul li {
-				width: calc(50% - 1rem);
-			}
-			ul li * {
-				text-decoration: none;
-				transition: 0.2s ease;
-			}
-			ul li:first-child {
-				width: 100%;
-				margin-bottom: 1rem;
-				text-align: center;
-			}
-			ul li:first-child img {
-				width: 100%;
-			}
-			ul li:first-child .title {
-				font-size: 2.369rem;
-			}
-			ul li img {
-				margin-bottom: 0.5rem;
-				border-radius: 12px;
-			}
-			ul li a {
-				display: block;
-			}
-			.title {
-				margin: 0;
-				color: rgb(var(--black));
-				line-height: 1;
-			}
-			.date {
-				margin: 0;
-				color: rgb(var(--gray));
-			}
-			ul li a:hover h4,
-			ul li a:hover .date {
-				color: rgb(var(--accent));
-			}
-			ul a:hover img {
-				box-shadow: var(--box-shadow);
-			}
-			@media (max-width: 720px) {
-				ul {
-					gap: 0.5em;
-				}
-				ul li {
-					width: 100%;
-					text-align: center;
-				}
-				ul li:first-child {
-					margin-bottom: 0;
-				}
-				ul li:first-child .title {
-					font-size: 1.563em;
-				}
-			}
-		</style>
+		<BaseHead
+			title={`文章分类 | ${SITE_TITLE}`}
+			description="按分类查看咸鱼哥知识小库的实践文章"
+		/>
 	</head>
+
 	<body>
 		<Header />
+
 		<main>
-			<section>
-				<ul>
-					{
-						posts.map((post) => (
-							<li>
-								<a href={`/blog/${post.id}/`}>
-									{post.data.heroImage && (
-										<Image width={720} height={360} src={post.data.heroImage} alt="" />
-									)}
-									<h4 class="title">{post.data.title}</h4>
-									<p class="date">
-										<FormattedDate date={post.data.pubDate} />
-									</p>
-								</a>
-							</li>
-						))
-					}
-				</ul>
-			</section>
+			<header class="archive-heading">
+				<div>
+					<p class="section-label">文章分类</p>
+					<h1>翻一翻研究手记</h1>
+					<p class="intro">按主题收好每一次调试、验证和复盘，找到你正在处理的那类问题。</p>
+				</div>
+				<div class="archive-summary">
+					<span aria-hidden="true"></span>
+					<strong>已收录 {posts.length} 篇</strong>
+					<small>分为 {categoryEntries.length} 个主题</small>
+				</div>
+			</header>
+
+			{
+				categoryEntries.length > 0 ? (
+					<div class="category-grid">
+						{categoryEntries.map(([category, categoryPosts]) => (
+							<section class="category-card">
+								<header class="category-header">
+									<div>
+										<span class="folder-mark" aria-hidden="true"></span>
+										<h2>{category}</h2>
+									</div>
+									<span class="count">{categoryPosts.length} 篇手记</span>
+								</header>
+
+								<ul>
+									{categoryPosts.map((post) => (
+										<li>
+											<a class="article-link" href={`/blog/${post.id}/`}>
+												<div class="article-copy">
+													<h3>{post.data.title}</h3>
+													<p>{post.data.description}</p>
+												</div>
+												<div class="article-meta">
+													<span><FormattedDate date={post.data.pubDate} /></span>
+													<svg viewBox="0 0 20 20" aria-hidden="true">
+														<path d="M4 10h11M11 6l4 4-4 4" />
+													</svg>
+												</div>
+											</a>
+										</li>
+									))}
+								</ul>
+							</section>
+						))}
+					</div>
+				) : (
+					<div class="empty-state">
+						<span aria-hidden="true">⌁</span>
+						<h2>研究日志已经准备好了</h2>
+						<p>第一篇实践文章发布后，会出现在这里。</p>
+					</div>
+				)
+			}
 		</main>
+
 		<Footer />
 	</body>
 </html>
+
+<style>
+	main {
+		padding-top: 5rem;
+	}
+
+	.archive-heading {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: end;
+		gap: 3rem;
+		margin-bottom: 4.5rem;
+	}
+
+	.archive-heading h1 {
+		margin-bottom: 1rem;
+		font-size: clamp(2.8rem, 7vw, 4.8rem);
+	}
+
+	.intro {
+		max-width: 610px;
+		margin: 0;
+		color: rgb(var(--gray));
+		font-size: 1.02rem;
+	}
+
+	.archive-summary {
+		position: relative;
+		display: flex;
+		min-width: 10.5rem;
+		padding: 1.1rem 1.2rem;
+		flex-direction: column;
+		background: white;
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 12px;
+		box-shadow: var(--shadow-soft);
+		transform: rotate(1.5deg);
+	}
+
+	.archive-summary > span {
+		position: absolute;
+		top: -0.55rem;
+		left: 50%;
+		width: 3.8rem;
+		height: 1.05rem;
+		background: rgba(139, 124, 197, 0.42);
+		transform: translateX(-50%) rotate(-2deg);
+	}
+
+	.archive-summary strong {
+		font-family: var(--font-display);
+		font-size: 1rem;
+	}
+
+	.archive-summary small {
+		margin-top: 0.25rem;
+		color: rgb(var(--gray));
+		font-size: 0.7rem;
+	}
+
+	.category-grid {
+		display: grid;
+		gap: 2rem;
+	}
+
+	.category-card {
+		position: relative;
+		overflow: visible;
+		background: rgba(var(--surface), 0.96);
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 0 var(--radius-md) var(--radius-md) var(--radius-md);
+		box-shadow: var(--shadow-soft);
+	}
+
+	.category-card::before {
+		position: absolute;
+		top: -0.75rem;
+		left: -1px;
+		width: 7rem;
+		height: 0.78rem;
+		content: "";
+		background: var(--accent);
+		border: 1px solid rgba(51, 127, 112, 0.2);
+		border-bottom: 0;
+		border-radius: 8px 12px 0 0;
+	}
+
+	.category-card:nth-child(3n + 2)::before {
+		background: var(--lavender);
+	}
+
+	.category-card:nth-child(3n)::before {
+		background: var(--sakura);
+	}
+
+	.category-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 1.4rem 1.5rem;
+		background: linear-gradient(90deg, var(--accent-soft), rgba(227, 245, 240, 0.22));
+		border-bottom: 1px solid rgb(var(--gray-light));
+		border-radius: 0 var(--radius-md) 0 0;
+	}
+
+	.category-card:nth-child(3n + 2) .category-header {
+		background: linear-gradient(90deg, var(--lavender-soft), rgba(239, 236, 250, 0.22));
+	}
+
+	.category-card:nth-child(3n) .category-header {
+		background: linear-gradient(90deg, var(--sakura-soft), rgba(252, 236, 240, 0.22));
+	}
+
+	.category-header > div {
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+	}
+
+	.folder-mark {
+		width: 0.72rem;
+		height: 0.72rem;
+		background: var(--accent);
+		border-radius: 3px 50% 50%;
+		transform: rotate(10deg);
+	}
+
+	.category-card:nth-child(3n + 2) .folder-mark {
+		background: var(--lavender);
+	}
+
+	.category-card:nth-child(3n) .folder-mark {
+		background: var(--sakura);
+	}
+
+	.category-header h2 {
+		margin: 0;
+		font-size: 1.45rem;
+	}
+
+	.count {
+		padding: 0.2rem 0.6rem;
+		color: rgb(var(--gray-dark));
+		font-size: 0.68rem;
+		font-weight: 700;
+		background: rgba(255, 255, 255, 0.8);
+		border: 1px solid rgba(var(--gray-light), 0.9);
+		border-radius: 999px;
+	}
+
+	ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	li + li {
+		border-top: 1px solid rgb(var(--gray-light));
+	}
+
+	.article-link {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 2rem;
+		padding: 1.45rem 1.5rem;
+		color: rgb(var(--gray-dark));
+		text-decoration: none;
+		transition: background 0.18s ease;
+	}
+
+	.article-link:hover {
+		color: rgb(var(--gray-dark));
+		background: rgba(var(--paper), 0.7);
+	}
+
+	.article-copy h3 {
+		margin: 0 0 0.35rem;
+		font-size: 1.16rem;
+		transition: color 0.18s ease;
+	}
+
+	.article-link:hover h3 {
+		color: var(--accent-dark);
+	}
+
+	.article-copy p {
+		margin: 0;
+		color: rgb(var(--gray));
+		font-size: 0.84rem;
+		line-height: 1.6;
+	}
+
+	.article-meta {
+		display: flex;
+		align-items: center;
+		gap: 1.15rem;
+		color: rgb(var(--gray));
+		font-size: 0.68rem;
+		white-space: nowrap;
+	}
+
+	.article-meta svg {
+		width: 1.05rem;
+		fill: none;
+		stroke: rgb(var(--black));
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		stroke-width: 1.7;
+		transition: stroke 0.18s ease, transform 0.18s ease;
+	}
+
+	.article-link:hover .article-meta svg {
+		stroke: var(--lavender);
+		transform: translateX(3px);
+	}
+
+	.empty-state {
+		padding: 5rem 1.5rem;
+		text-align: center;
+		background: white;
+		border: 1px dashed rgb(var(--gray-light));
+		border-radius: var(--radius-md);
+	}
+
+	.empty-state > span {
+		display: block;
+		margin-bottom: 1rem;
+		color: var(--accent);
+		font-size: 2.5rem;
+	}
+
+	.empty-state h2 {
+		font-size: 1.6rem;
+	}
+
+	.empty-state p {
+		margin: 0;
+		color: rgb(var(--gray));
+	}
+
+	@media (max-width: 720px) {
+		main {
+			padding-top: 3rem;
+		}
+
+		.archive-heading {
+			grid-template-columns: 1fr;
+			gap: 2rem;
+			margin-bottom: 3.5rem;
+		}
+
+		.archive-summary {
+			justify-self: start;
+		}
+
+		.category-header {
+			padding: 1.15rem 1rem;
+		}
+
+		.article-link {
+			grid-template-columns: 1fr;
+			gap: 0.85rem;
+			padding: 1.2rem 1rem;
+		}
+
+		.article-meta {
+			justify-content: space-between;
+		}
+	}
+</style>

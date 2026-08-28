@@ -3,9 +3,15 @@ import { SITE_TITLE } from '../consts';
 import HeaderLink from './HeaderLink.astro';
 ---
 
-<header>
-	<nav>
-		<h2><a class="brand" href="/">{SITE_TITLE}</a></h2>
+<header class="site-header">
+	<nav aria-label="主导航">
+		<a class="brand" href="/" aria-label={SITE_TITLE}>
+			<span class="brand-mark" aria-hidden="true">鱼</span>
+			<span class="brand-copy">
+				<strong>{SITE_TITLE}</strong>
+				<small>个人技术研究日志</small>
+			</span>
+		</a>
 
 		<div class="internal-links">
 			<HeaderLink href="/">首页</HeaderLink>
@@ -18,60 +24,176 @@ import HeaderLink from './HeaderLink.astro';
 			href="https://github.com/Tiger287-bit"
 			target="_blank"
 			rel="noopener noreferrer"
+			aria-label="在 GitHub 上查看咸鱼哥"
 		>
-			GitHub
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.71.5.1.68-.22.68-.49v-1.92c-2.78.62-3.37-1.21-3.37-1.21-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.35 1.12 2.92.86.09-.66.35-1.12.64-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.32 9.32 0 0 1 12 6.95c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9v2.81c0 .27.18.59.69.49A10.24 10.24 0 0 0 22 12.23C22 6.58 17.52 2 12 2Z" />
+			</svg>
+			<span>GitHub</span>
 		</a>
 	</nav>
 </header>
 
 <style>
-	header {
-		padding: 0 1rem;
-		background: white;
-		box-shadow: 0 2px 8px rgba(var(--black), 5%);
+	.site-header {
+		position: sticky;
+		top: 0;
+		z-index: 50;
+		padding: 0 1.5rem;
+		background: rgba(var(--paper), 0.9);
+		border-bottom: 1px solid rgba(var(--gray-light), 0.86);
+		backdrop-filter: blur(18px);
 	}
 
 	nav {
-		display: flex;
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
 		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-	}
-
-	h2 {
-		margin: 0;
-		font-size: 1rem;
-	}
-
-	nav a {
-		padding: 1rem 0.5rem;
-		color: var(--black);
-		text-decoration: none;
+		width: min(var(--content-width), 100%);
+		min-height: 70px;
+		margin: 0 auto;
 	}
 
 	.brand {
-		padding-left: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-self: start;
+		gap: 0.75rem;
+		color: rgb(var(--black));
+		text-decoration: none;
+	}
+
+	.brand-mark {
+		display: grid;
+		width: 2.3rem;
+		height: 2.3rem;
+		place-items: center;
+		color: white;
+		font-family: var(--font-display);
+		font-size: 1.05rem;
+		font-weight: 700;
+		line-height: 1;
+		background: var(--lavender);
+		border-radius: 50% 48% 46% 42%;
+		box-shadow: 4px 4px 0 var(--sakura);
+		transform: rotate(-3deg);
+	}
+
+	.brand-copy {
+		display: flex;
+		flex-direction: column;
+		line-height: 1.1;
+	}
+
+	.brand-copy strong {
+		font-size: 0.92rem;
+		letter-spacing: -0.01em;
+	}
+
+	.brand-copy small {
+		margin-top: 0.32rem;
+		color: rgb(var(--gray));
+		font-size: 0.61rem;
+		letter-spacing: 0.08em;
 	}
 
 	.internal-links {
 		display: flex;
+		align-self: stretch;
+		align-items: center;
+		gap: 1.35rem;
 	}
 
-	.internal-links a {
-		border-bottom: 4px solid transparent;
+	.internal-links :global(a) {
+		position: relative;
+		padding: 0.35rem 0.05rem;
+		color: rgb(var(--gray-dark));
+		font-size: 0.84rem;
+		font-weight: 700;
+		transition: color 0.18s ease;
 	}
 
-	.internal-links a.active {
-		border-bottom-color: var(--accent);
+	.internal-links :global(a)::after {
+		position: absolute;
+		bottom: -0.1rem;
+		left: 50%;
+		width: 0;
+		height: 0.38rem;
+		content: "";
+		background: var(--sakura);
+		border-radius: 999px;
+		opacity: 0.72;
+		transform: translateX(-50%) rotate(-3deg);
+		transition: width 0.18s ease;
+	}
+
+	.internal-links :global(a:hover),
+	.internal-links :global(a.active) {
+		color: var(--accent-dark);
+	}
+
+	.internal-links :global(a.active)::after {
+		width: 115%;
 	}
 
 	.github {
-		font-size: 0.9rem;
+		display: inline-flex;
+		align-items: center;
+		justify-self: end;
+		gap: 0.45rem;
+		padding: 0.45rem 0.75rem;
+		color: rgb(var(--black));
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-decoration: none;
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 10px;
+		transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 	}
 
-	@media (max-width: 720px) {
+	.github:hover {
+		color: var(--accent-dark);
+		background: white;
+		border-color: rgba(102, 191, 174, 0.65);
+	}
+
+	.github svg {
+		width: 1rem;
+		height: 1rem;
+		fill: currentColor;
+	}
+
+	@media (max-width: 760px) {
+		.site-header {
+			padding: 0 1rem;
+		}
+
+		nav {
+			grid-template-columns: auto 1fr;
+			min-height: 64px;
+		}
+
+		.internal-links {
+			justify-self: end;
+			gap: 1.05rem;
+		}
+
 		.github {
 			display: none;
+		}
+	}
+
+	@media (max-width: 540px) {
+		.brand-copy {
+			display: none;
+		}
+
+		.internal-links {
+			gap: 0.85rem;
+		}
+
+		.internal-links :global(a) {
+			font-size: 0.8rem;
 		}
 	}
 </style>

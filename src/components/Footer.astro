@@ -1,15 +1,117 @@
 ---
+import { SITE_TITLE } from '../consts';
+
 const today = new Date();
 ---
 
 <footer>
-	&copy; {today.getFullYear()} 咸鱼哥 · 持续记录，慢慢积累。
+	<div class="footer-inner">
+		<div class="footer-brand">
+			<span class="footer-mark" aria-hidden="true">鱼</span>
+			<div>
+				<strong>{SITE_TITLE}</strong>
+				<p>把问题拆开，把过程写清，把经验留下。</p>
+			</div>
+		</div>
+
+		<div class="footer-meta">
+			<div class="footer-links">
+				<a href="/rss.xml">RSS</a>
+				<a href="https://github.com/Tiger287-bit" target="_blank" rel="noopener noreferrer">GitHub</a>
+			</div>
+			<small>&copy; {today.getFullYear()} 咸鱼哥 · 持续记录，慢慢积累。</small>
+		</div>
+	</div>
 </footer>
 
 <style>
 	footer {
-		padding: 3rem 1rem;
+		margin-top: auto;
+		padding: 0 1.5rem 2rem;
+	}
+
+	.footer-inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 2rem;
+		width: min(var(--content-width), 100%);
+		margin: 0 auto;
+		padding: 2.25rem 0;
+		border-top: 1px solid rgb(var(--gray-light));
+	}
+
+	.footer-brand {
+		display: flex;
+		align-items: center;
+		gap: 0.9rem;
+	}
+
+	.footer-mark {
+		display: grid;
+		width: 2.6rem;
+		height: 2.6rem;
+		place-items: center;
+		color: white;
+		font-weight: 700;
+		background: rgb(var(--black));
+		border-radius: 50% 45% 48% 42%;
+		box-shadow: 3px 3px 0 var(--sakura);
+	}
+
+	.footer-brand strong {
+		display: block;
+		font-family: var(--font-display);
+		font-size: 0.92rem;
+	}
+
+	.footer-brand p {
+		margin: 0.15rem 0 0;
 		color: rgb(var(--gray));
-		text-align: center;
+		font-size: 0.78rem;
+	}
+
+	.footer-meta {
+		color: rgb(var(--gray));
+		font-size: 0.75rem;
+		text-align: right;
+	}
+
+	.footer-links {
+		display: flex;
+		justify-content: flex-end;
+		gap: 1rem;
+		margin-bottom: 0.45rem;
+	}
+
+	.footer-links a {
+		color: rgb(var(--black));
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.footer-links a:hover {
+		color: var(--lavender);
+	}
+
+	@media (max-width: 620px) {
+		footer {
+			padding-inline: 1rem;
+		}
+
+		.footer-inner {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+
+		.footer-meta {
+			text-align: left;
+		}
+
+		.footer-links {
+			justify-content: flex-start;
+		}
 	}
 </style>

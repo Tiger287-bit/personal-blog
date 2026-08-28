@@ -1,0 +1,86 @@
+<svg
+	class="fish-mascot"
+	viewBox="0 0 240 170"
+	fill="none"
+	xmlns="http://www.w3.org/2000/svg"
+	aria-hidden="true"
+>
+	<path class="tail" d="M178 79c19-18 35-26 48-25-5 13-6 24-2 34 3 9 3 18 1 27-15-3-31-13-48-28" />
+	<path class="body" d="M27 89c18-37 55-58 98-54 35 3 59 21 66 49-10 30-37 48-76 49-42 1-75-15-88-44Z" />
+	<path class="fin" d="M86 39c10-16 25-24 45-23-4 10-4 20 2 30" />
+	<path class="fin" d="M96 127c8 13 20 20 36 21-1-10 2-19 9-27" />
+	<path class="face-line" d="M60 94c12 8 26 10 42 5" />
+	<path class="face-line" d="M146 95c10 5 19 5 27 0" />
+	<circle class="eye" cx="72" cy="78" r="6" />
+	<circle class="eye-shine" cx="74" cy="76" r="1.7" />
+	<circle class="eye" cx="154" cy="78" r="6" />
+	<circle class="eye-shine" cx="156" cy="76" r="1.7" />
+	<path class="mouth" d="M107 89c6 5 12 5 18 0" />
+	<ellipse class="blush" cx="55" cy="94" rx="11" ry="5" />
+	<ellipse class="blush" cx="172" cy="94" rx="11" ry="5" />
+	<path class="antenna" d="M112 35c-2-12 3-20 14-25" />
+	<circle class="antenna-tip" cx="129" cy="8" r="5" />
+	<path class="notebook" d="M87 111c15-4 31-4 47 0v27c-16-4-32-4-47 0v-27Z" />
+	<path class="notebook-line" d="M110.5 111v27M94 118h11M116 118h11M94 124h11M116 124h11" />
+</svg>
+
+<style>
+	.fish-mascot {
+		display: block;
+		width: 100%;
+		height: auto;
+		overflow: visible;
+	}
+
+	.body,
+	.tail,
+	.fin,
+	.notebook {
+		stroke: rgb(var(--black));
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		stroke-width: 3;
+	}
+
+	.body {
+		fill: white;
+	}
+
+	.tail,
+	.fin {
+		fill: var(--accent-soft);
+	}
+
+	.notebook {
+		fill: var(--lavender-soft);
+	}
+
+	.face-line,
+	.mouth,
+	.antenna,
+	.notebook-line {
+		stroke: rgb(var(--black));
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		stroke-width: 2.5;
+	}
+
+	.eye {
+		fill: rgb(var(--black));
+	}
+
+	.eye-shine {
+		fill: white;
+	}
+
+	.blush {
+		fill: var(--sakura);
+		opacity: 0.6;
+	}
+
+	.antenna-tip {
+		fill: var(--sakura);
+		stroke: rgb(var(--black));
+		stroke-width: 2.5;
+	}
+</style>

@@ -7,9 +7,70 @@ import Layout from '../layouts/BlogPost.astro';
 	description="关于咸鱼哥知识小库"
 	pubDate={new Date('2026-08-23')}
 >
-	<p>你好，我是咸鱼哥。</p>
+	<p class="hello">你好，我是咸鱼哥。</p>
 
-	<p>
-		这里记录机器人、嵌入式、端侧 AI，以及项目开发中的问题和解决过程。
+	<p class="about-intro">
+		这里记录机器人、嵌入式、端侧 AI，以及项目开发中的问题和解决过程。我希望每一篇手记都能留下足够清晰的上下文，让未来的自己和遇到相同问题的人少走一点弯路。
 	</p>
+
+	<h2>这里会写什么</h2>
+	<div class="focus-grid">
+		<div><span>01</span><strong>问题现场</strong><p>现象、环境和最初判断。</p></div>
+		<div><span>02</span><strong>验证过程</strong><p>尝试过的路径与关键证据。</p></div>
+		<div><span>03</span><strong>可复用结论</strong><p>最终方案、边界与注意事项。</p></div>
+	</div>
 </Layout>
+
+<style>
+	.hello {
+		color: var(--accent-dark);
+		font-size: 1.25rem;
+		font-weight: 700;
+	}
+
+	.about-intro {
+		font-size: 1.08rem;
+	}
+
+	.focus-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 0.75rem;
+		margin-top: 1.5rem;
+	}
+
+	.focus-grid div {
+		padding: 1rem;
+		background: rgba(8, 127, 114, 0.055);
+		border: 1px solid rgba(8, 127, 114, 0.13);
+		border-radius: var(--radius-sm);
+	}
+
+	.focus-grid span {
+		display: block;
+		margin-bottom: 1rem;
+		color: var(--accent);
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		font-weight: 700;
+	}
+
+	.focus-grid strong {
+		display: block;
+		margin-bottom: 0.35rem;
+		font-size: 0.92rem;
+	}
+
+	.focus-grid p {
+		margin: 0;
+		color: rgb(var(--gray));
+		font-size: 0.76rem;
+		line-height: 1.55;
+	}
+
+	@media (max-width: 600px) {
+		.focus-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

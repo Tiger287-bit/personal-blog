@@ -1,7 +1,8 @@
 ---
-title: '咸鱼哥知识小库上线'
-description: '个人技术博客的第一篇记录。'
-pubDate: 2026-08-23
+title: "咸鱼哥知识小库上线"
+description: "个人技术博客的第一篇记录。"
+category: "博客公告"
+pubDate: "2026-08-23"
 ---
 
 ## 从这里开始
