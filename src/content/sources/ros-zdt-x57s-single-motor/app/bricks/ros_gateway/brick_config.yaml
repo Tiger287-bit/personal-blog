@@ -1,0 +1,32 @@
+id: ros_gateway
+name: ROS Gateway
+description: A reusable WebSocket gateway between App Lab and native ROS 2.
+category: miscellaneous
+supported_boards:
+  - ventunoq
+ports:
+  - 8765
+variables:
+  - name: ROS_GATEWAY_HOST
+    default_value: "0.0.0.0"
+    hidden: true
+  - name: ROS_GATEWAY_PORT
+    default_value: "8765"
+    hidden: true
+  - name: ROS_GATEWAY_PATH
+    default_value: "/ros"
+    hidden: true
+  - name: ROS_GATEWAY_NODE_NAME
+    default_value: "arduino-app"
+  - name: ROS_GATEWAY_MAX_VX
+    default_value: "0.8"
+  - name: ROS_GATEWAY_MAX_VY
+    default_value: "0.8"
+  - name: ROS_GATEWAY_MAX_WZ
+    default_value: "1.5"
+  - name: ROS_GATEWAY_MAX_MOTOR_RPM
+    default_value: "60"
+  - name: ROS_GATEWAY_COMMAND_TIMEOUT_MS
+    default_value: "300"
+  - name: ROS_GATEWAY_HEARTBEAT_TIMEOUT_MS
+    default_value: "3000"

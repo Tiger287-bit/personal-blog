@@ -1,0 +1,20 @@
+id: zdt_x57s_can
+name: ZDT X57S CAN
+description: A reusable single-motor Brick for one ZDT X57S second-generation FW_Emm motor.
+category: miscellaneous
+supported_boards:
+  - ventunoq
+ports: []
+variables:
+  - name: ZDT_CAN_GATEWAY_HOST
+    default_value: "msgpack-rpc-router"
+    hidden: true
+  - name: ZDT_CAN_GATEWAY_PORT
+    default_value: "8766"
+    hidden: true
+  - name: ZDT_CAN_GATEWAY_TOKEN
+    default_value: "<随机令牌>"
+    hidden: true
+  - name: ZDT_CAN_REQUEST_TIMEOUT_S
+    default_value: "1.5"
+    hidden: true

@@ -39,7 +39,7 @@ const section: ArticleSectionDefinition = ARTICLE_SECTIONS[sectionId] ?? {
 	order: 1000,
 };
 const articles = [...sourceArticles].sort((a, b) => {
-	if (sectionId === 'app-lab') {
+	if (sectionId === 'app-lab' || sectionId === 'bricks') {
 		return (a.data.order ?? Number.MAX_SAFE_INTEGER) - (b.data.order ?? Number.MAX_SAFE_INTEGER);
 	}
 	return b.data.pubDate.valueOf() - a.data.pubDate.valueOf();
@@ -183,6 +183,10 @@ function getArticleHref(article: CollectionEntry<'articles'>) {
 		background: linear-gradient(135deg, white, var(--accent-soft));
 	}
 
+	.section-hero.tone-brick {
+		background: linear-gradient(135deg, white, rgba(232, 242, 252, 0.88));
+	}
+
 	.section-hero.tone-hardware {
 		background: linear-gradient(135deg, white, var(--sakura-soft));
 	}
@@ -199,6 +203,10 @@ function getArticleHref(article: CollectionEntry<'articles'>) {
 
 	.tone-lab .folder-tab {
 		background: var(--accent);
+	}
+
+	.tone-brick .folder-tab {
+		background: #6f9fc8;
 	}
 
 	.tone-hardware .folder-tab {

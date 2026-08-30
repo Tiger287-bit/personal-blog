@@ -1,0 +1,27 @@
+---
+import { getCollection } from 'astro:content';
+import SourceReader from '../../../../layouts/SourceReader.astro';
+import { getArticleSourceFiles } from '../../../../sourceFiles';
+
+export async function getStaticPaths() {
+	const entries = await getCollection('articles', ({ data }) => data.section !== 'app-lab' && Boolean(data.sourceDir));
+	return entries.flatMap((entry) => {
+		const files = getArticleSourceFiles(entry.data.sourceDir);
+		return files.map((file) => ({
+			params: { slug: entry.id, file: file.path },
+			props: { entry, file, files },
+		}));
+	});
+}
+
+const { entry, file, files } = Astro.props;
+---
+
+<SourceReader
+	articleSlug={entry.id}
+	articleTitle={entry.data.title}
+	articleDescription={entry.data.description}
+	section={entry.data.section}
+	file={file}
+	files={files}
+/>

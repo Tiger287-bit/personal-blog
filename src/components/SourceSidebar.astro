@@ -1,0 +1,191 @@
+---
+import SourceTree from './SourceTree.astro';
+import {
+	getArticleSourceHref,
+	getArticleSourceTree,
+	type ArticleSourceLink,
+} from '../sourceFiles';
+
+interface Props {
+	articleSlug: string;
+	section: string;
+	files?: ArticleSourceLink[];
+	activePath?: string;
+}
+
+const { articleSlug, section, files = [], activePath } = Astro.props;
+const articleHref = getArticleSourceHref(section, articleSlug);
+const treeRows = getArticleSourceTree(files);
+---
+
+{
+	files.length > 0 && (
+		<aside class="source-shell" aria-label="配套源码">
+			<nav class="desktop-source-nav" aria-label="配套源码文件">
+				<div class="source-heading">
+					<small>SOURCE FILES</small>
+					<strong>配套源码</strong>
+				</div>
+				<a class:list={['article-link', { active: !activePath }]} href={articleHref}>
+					<span aria-hidden="true">←</span>
+					教程正文
+				</a>
+				<SourceTree
+					articleSlug={articleSlug}
+					section={section}
+					rows={treeRows}
+					activePath={activePath}
+				/>
+			</nav>
+
+			<details class="mobile-source-nav">
+				<summary>
+					<span>配套源码</span>
+					<small>{files.length} 个文件</small>
+				</summary>
+				<div class="mobile-source-content">
+					<a class:list={['article-link', { active: !activePath }]} href={articleHref}>教程正文</a>
+					<SourceTree
+						articleSlug={articleSlug}
+						section={section}
+						rows={treeRows}
+						activePath={activePath}
+					/>
+				</div>
+			</details>
+		</aside>
+	)
+}
+
+<style>
+	.source-shell {
+		height: 100%;
+		min-width: 0;
+		align-self: stretch;
+	}
+
+	.desktop-source-nav {
+		position: sticky;
+		top: calc(70px + 0.75rem);
+		max-height: calc(100vh - 70px - 1.5rem);
+		padding: 1rem 0.85rem;
+		overflow-y: auto;
+		background: rgba(var(--surface), 0.96);
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 16px 10px 12px 18px;
+		box-shadow: -5px 6px 0 var(--accent-soft);
+		backdrop-filter: blur(12px);
+		scrollbar-width: thin;
+		scrollbar-color: var(--accent) transparent;
+	}
+
+	.source-heading {
+		padding: 0 0.25rem 0.75rem;
+		border-bottom: 1px solid rgb(var(--gray-light));
+	}
+
+	.source-heading small,
+	.source-heading strong {
+		display: block;
+	}
+
+	.source-heading small {
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.52rem;
+		font-weight: 700;
+		letter-spacing: 0.11em;
+	}
+
+	.source-heading strong {
+		margin-top: 0.08rem;
+		font-family: var(--font-display);
+		font-size: 0.92rem;
+	}
+
+	.article-link {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin: 0.7rem 0;
+		padding: 0.48rem 0.55rem;
+		color: rgb(var(--gray));
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-decoration: none;
+		border-radius: 7px;
+	}
+
+	.article-link:hover,
+	.article-link.active {
+		color: var(--accent-dark);
+		background: var(--accent-soft);
+	}
+
+	.mobile-source-nav {
+		display: none;
+		background: rgba(var(--surface), 0.96);
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 12px;
+		box-shadow: var(--shadow-soft);
+	}
+
+	.mobile-source-nav summary {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.9rem 1rem;
+		font-family: var(--font-display);
+		font-weight: 700;
+		cursor: pointer;
+		list-style: none;
+	}
+
+	.mobile-source-nav summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.mobile-source-nav summary small {
+		margin-left: auto;
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		font-weight: 500;
+	}
+
+	.mobile-source-nav summary::after {
+		display: grid;
+		width: 1.35rem;
+		height: 1.35rem;
+		place-items: center;
+		content: '+';
+		color: var(--accent-dark);
+		font-family: var(--font-mono);
+		font-size: 0.85rem;
+		background: var(--accent-soft);
+		border-radius: 50%;
+	}
+
+	.mobile-source-nav[open] summary::after {
+		content: '−';
+	}
+
+	.mobile-source-content {
+		padding: 0.15rem 1rem 1rem;
+		border-top: 1px solid rgb(var(--gray-light));
+	}
+
+	@media (max-width: 1280px) {
+		.source-shell {
+			height: auto;
+		}
+
+		.desktop-source-nav {
+			display: none;
+		}
+
+		.mobile-source-nav {
+			display: block;
+		}
+	}
+</style>

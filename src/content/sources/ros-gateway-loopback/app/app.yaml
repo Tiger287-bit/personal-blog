@@ -1,0 +1,15 @@
+name: ROS Gateway Loopback
+description: Verify Custom Brick lifecycle, port mapping, and WebSocket protocol.
+ports: []
+bricks:
+  - ros_gateway:
+      variables:
+        ROS_GATEWAY_HOST: "0.0.0.0"
+        ROS_GATEWAY_PORT: "8765"
+        ROS_GATEWAY_PATH: "/ros"
+        ROS_GATEWAY_MAX_VX: "0.8"
+        ROS_GATEWAY_MAX_VY: "0.8"
+        ROS_GATEWAY_MAX_WZ: "1.5"
+        ROS_GATEWAY_COMMAND_TIMEOUT_MS: "300"
+        ROS_GATEWAY_HEARTBEAT_TIMEOUT_MS: "3000"
+icon: 🔁

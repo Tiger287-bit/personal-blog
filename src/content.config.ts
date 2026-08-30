@@ -18,6 +18,7 @@ const articles = defineCollection({
 			verifiedDate: z.coerce.date().optional(),
 			environment: z.array(z.string()).default([]),
 			capabilities: z.array(z.string()).default([]),
+			sourceDir: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(),
 		}),
 });
 

@@ -1,4 +1,4 @@
-export type ArticleSectionTone = 'lab' | 'hardware' | 'general';
+export type ArticleSectionTone = 'lab' | 'brick' | 'hardware' | 'general';
 
 export interface ArticleSectionDefinition {
 	title: string;
@@ -15,6 +15,13 @@ export const ARTICLE_SECTIONS: Record<string, ArticleSectionDefinition> = {
 		description: '用独立小 App 验证硬件、协议和 ROS 2 接口，每篇文章只解决一项能力。',
 		tone: 'lab',
 		order: 10,
+	},
+	bricks: {
+		title: 'Custom Bricks',
+		label: 'REUSABLE · COMPONENTS',
+		description: '沉淀可复用的 App Lab 组件：每篇教程说明组件边界、公开 API、依赖、使用方法与完整源码。',
+		tone: 'brick',
+		order: 15,
 	},
 	'embedded-hardware': {
 		title: '嵌入式与硬件',

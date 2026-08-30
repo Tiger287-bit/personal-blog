@@ -1,0 +1,166 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import SourceCodeViewer from '../components/SourceCodeViewer.astro';
+import SourceSidebar from '../components/SourceSidebar.astro';
+import { getArticleSourceHref, type ArticleSourceFile, type ArticleSourceLink } from '../sourceFiles';
+
+interface Props {
+	articleSlug: string;
+	articleTitle: string;
+	articleDescription: string;
+	section: string;
+	file: ArticleSourceFile;
+	files: ArticleSourceLink[];
+}
+
+const { articleSlug, articleTitle, articleDescription, section, file, files } = Astro.props;
+const articleHref = getArticleSourceHref(section, articleSlug);
+---
+
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<BaseHead title={`${file.name} | ${articleTitle}`} description={`${articleDescription} 配套源码：${file.path}`} />
+	</head>
+	<body>
+		<Header />
+		<main>
+			<header class="source-page-header">
+				<a href={articleHref}><span aria-hidden="true">←</span> 返回教程正文</a>
+				<p>配套源码</p>
+				<h1>{file.name}</h1>
+				<code>{file.path}</code>
+			</header>
+
+			<div class="source-reading-shell">
+				<SourceSidebar
+					articleSlug={articleSlug}
+					section={section}
+					files={files}
+					activePath={file.path}
+				/>
+				<article class="source-panel">
+					<div class="source-context">
+						<span>{articleTitle}</span>
+						<strong>{file.path}</strong>
+					</div>
+					<SourceCodeViewer file={file} />
+				</article>
+			</div>
+		</main>
+		<Footer />
+	</body>
+</html>
+
+<style>
+	main {
+		width: min(1480px, calc(100% - 3rem));
+		padding-top: 3.25rem;
+	}
+
+	.source-page-header {
+		width: min(1120px, 100%);
+		margin: 0 auto 2rem;
+	}
+
+	.source-page-header > a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 1.8rem;
+		color: rgb(var(--gray));
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.source-page-header > p {
+		margin: 0 0 0.3rem;
+		color: var(--accent-dark);
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		font-weight: 700;
+		letter-spacing: 0.1em;
+	}
+
+	.source-page-header h1 {
+		margin-bottom: 0.6rem;
+		font-family: var(--font-mono);
+		font-size: clamp(1.8rem, 4vw, 2.8rem);
+		word-break: break-all;
+	}
+
+	.source-page-header code {
+		font-size: 0.72rem;
+	}
+
+	.source-reading-shell {
+		display: grid;
+		grid-template-columns: minmax(190px, 220px) minmax(0, 1120px);
+		align-items: start;
+		justify-content: center;
+		gap: clamp(1.5rem, 3vw, 2.25rem);
+	}
+
+	.source-panel {
+		min-width: 0;
+		padding: clamp(1.1rem, 3vw, 1.6rem);
+		background: rgba(var(--surface), 0.98);
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 10px 20px 16px 18px;
+		box-shadow: var(--shadow-paper);
+	}
+
+	.source-context {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1rem;
+		padding: 0 0.15rem;
+		font-size: 0.68rem;
+	}
+
+	.source-context span {
+		color: rgb(var(--gray));
+	}
+
+	.source-context strong {
+		max-width: 62%;
+		overflow: hidden;
+		font-family: var(--font-mono);
+		font-size: 0.64rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	@media (max-width: 1280px) {
+		.source-reading-shell {
+			grid-template-columns: minmax(0, 1120px);
+			gap: 1rem;
+		}
+	}
+
+	@media (max-width: 620px) {
+		main {
+			width: min(100% - 2rem, 1480px);
+			padding-top: 2.4rem;
+		}
+
+		.source-panel {
+			padding: 0.7rem;
+		}
+
+		.source-context {
+			display: block;
+		}
+
+		.source-context strong {
+			display: block;
+			max-width: 100%;
+			margin-top: 0.25rem;
+		}
+	}
+</style>

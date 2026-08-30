@@ -5,7 +5,9 @@ import BaseHead from '../components/BaseHead.astro';
 import Footer from '../components/Footer.astro';
 import FormattedDate from '../components/FormattedDate.astro';
 import Header from '../components/Header.astro';
+import SourceSidebar from '../components/SourceSidebar.astro';
 import TableOfContents from '../components/TableOfContents.astro';
+import type { ArticleSourceLink } from '../sourceFiles';
 
 interface ArticleHeading {
 	depth: number;
@@ -14,7 +16,9 @@ interface ArticleHeading {
 }
 
 type Props = CollectionEntry<'articles'>['data'] & {
+	articleSlug: string;
 	headings?: ArticleHeading[];
+	sourceFiles?: ArticleSourceLink[];
 };
 
 const {
@@ -28,7 +32,9 @@ const {
 	verifiedDate,
 	environment = [],
 	capabilities = [],
+	articleSlug,
 	headings = [],
+	sourceFiles = [],
 } = Astro.props;
 
 const stages = [
@@ -51,7 +57,7 @@ const evidenceCopy = {
 	</head>
 	<body>
 		<Header />
-		<main>
+		<main class:list={{ 'with-sources': sourceFiles.length > 0 }}>
 			<article>
 				<a class="back-link" href="/blog/sections/app-lab/">
 					<span aria-hidden="true">←</span> 返回文章 · App Lab
@@ -107,7 +113,8 @@ const evidenceCopy = {
 					</div>
 				</div>
 
-				<div class="reading-shell">
+				<div class:list={['reading-shell', { 'has-sources': sourceFiles.length > 0 }]}>
+					<SourceSidebar articleSlug={articleSlug} section="app-lab" files={sourceFiles} />
 					<TableOfContents headings={headings} />
 					<div class="article-body">
 						<span class="binder-mark" aria-hidden="true"></span>
@@ -133,6 +140,10 @@ const evidenceCopy = {
 	main {
 		width: min(var(--content-width), calc(100% - 3rem));
 		padding-top: 3.25rem;
+	}
+
+	main.with-sources {
+		width: min(1480px, calc(100% - 3rem));
 	}
 
 	.back-link {
@@ -383,6 +394,23 @@ const evidenceCopy = {
 		align-self: stretch;
 	}
 
+	.reading-shell.has-sources {
+		grid-template-columns: minmax(190px, 220px) minmax(0, 860px) minmax(190px, 220px);
+	}
+
+	.reading-shell.has-sources :global(.source-shell) {
+		grid-row: 1;
+		grid-column: 1;
+	}
+
+	.reading-shell.has-sources :global(.toc-shell) {
+		grid-column: 3;
+	}
+
+	.reading-shell.has-sources .article-body {
+		grid-column: 2;
+	}
+
 	.article-body {
 		position: relative;
 		grid-row: 1;
@@ -471,6 +499,38 @@ const evidenceCopy = {
 
 		.article-body {
 			grid-row: 2;
+			grid-column: 1;
+		}
+	}
+
+	@media (max-width: 1280px) {
+		.reading-shell.has-sources {
+			grid-template-columns: minmax(0, 860px);
+			gap: 1rem;
+		}
+
+		.reading-shell.has-sources :global(.source-shell) {
+			grid-row: 1;
+			grid-column: 1;
+			height: auto;
+		}
+
+		.reading-shell.has-sources :global(.toc-shell) {
+			grid-row: 2;
+			grid-column: 1;
+			height: auto;
+		}
+
+		.reading-shell.has-sources :global(.desktop-toc) {
+			display: none;
+		}
+
+		.reading-shell.has-sources :global(.mobile-toc) {
+			display: block;
+		}
+
+		.reading-shell.has-sources .article-body {
+			grid-row: 3;
 			grid-column: 1;
 		}
 	}

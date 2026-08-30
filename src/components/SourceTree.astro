@@ -1,0 +1,296 @@
+---
+import {
+	getArticleSourceHref,
+	type ArticleSourceTreeRow,
+} from '../sourceFiles';
+
+interface Props {
+	articleSlug: string;
+	section: string;
+	rows: ArticleSourceTreeRow[];
+	activePath?: string;
+}
+
+const { articleSlug, section, rows, activePath } = Astro.props;
+---
+
+<ul
+	class="source-tree"
+	data-source-tree
+	data-tree-id={`${section}:${articleSlug}`}
+	data-active-path={activePath ?? ''}
+>
+	{
+		rows.map((row) => (
+			<li
+				class:list={[
+					'tree-row',
+					row.kind,
+					{ branch: row.kind === 'directory' && activePath?.startsWith(`${row.path}/`) },
+				]}
+				style={`--tree-depth: ${row.depth}`}
+				data-tree-row
+				data-tree-path={row.path}
+				data-tree-kind={row.kind}
+			>
+				{row.kind === 'directory' ? (
+					<button
+						class="directory-toggle"
+						type="button"
+						aria-expanded="true"
+						aria-label={`${row.name} 文件夹`}
+						data-tree-toggle={row.path}
+						title={row.path}
+					>
+						<span class="tree-chevron" aria-hidden="true">›</span>
+						<span class="folder-mark" aria-hidden="true" />
+						<span>{row.name}</span>
+					</button>
+				) : (
+					<a
+						class:list={{ active: activePath === row.path }}
+						href={getArticleSourceHref(section, articleSlug, row.path)}
+						title={row.path}
+					>
+						<span class="tree-spacer" aria-hidden="true" />
+						<span class="file-mark" aria-hidden="true" />
+						<span class="file-name">{row.name}</span>
+						<small>{row.file?.language}</small>
+					</a>
+				)}
+			</li>
+		))
+	}
+</ul>
+
+<script>
+	const treeGroups = new Map<string, HTMLElement[]>();
+	for (const tree of document.querySelectorAll<HTMLElement>('[data-source-tree]')) {
+		const treeId = tree.dataset.treeId;
+		if (!treeId) continue;
+		const group = treeGroups.get(treeId) ?? [];
+		group.push(tree);
+		treeGroups.set(treeId, group);
+	}
+
+	/*
+	 * @description         : 从当前浏览会话读取已收起的目录路径
+	 * @param treeId        : 板块与文章slug组成的目录树ID
+	 * @return              : 已收起目录路径集合
+	 */
+	const readCollapsedPaths = (treeId: string): Set<string> => {
+		try {
+			const value = window.sessionStorage.getItem(`source-tree:${treeId}`);
+			const paths: unknown = value ? JSON.parse(value) : [];
+			if (!Array.isArray(paths)) return new Set();
+			return new Set(paths.filter((path): path is string => typeof path === 'string'));
+		} catch {
+			return new Set();
+		}
+	};
+
+	/*
+	 * @description         : 保存当前浏览会话中的目录收放状态
+	 * @param treeId        : 板块与文章slug组成的目录树ID
+	 * @param paths         : 已收起目录路径集合
+	 * @return              : 无返回值
+	 */
+	const writeCollapsedPaths = (treeId: string, paths: Set<string>): void => {
+		try {
+			window.sessionStorage.setItem(`source-tree:${treeId}`, JSON.stringify([...paths]));
+		} catch {
+			// 浏览器禁止会话存储时，目录树仍可在当前页面正常收放。
+		}
+	};
+
+	/*
+	 * @description         : 同步同一文章桌面端与移动端目录树的可见状态
+	 * @param trees         : 同一文章的目录树元素
+	 * @param collapsed     : 已收起目录路径集合
+	 * @return              : 无返回值
+	 */
+	const refreshTrees = (trees: HTMLElement[], collapsed: Set<string>): void => {
+		for (const tree of trees) {
+			for (const row of tree.querySelectorAll<HTMLElement>('[data-tree-row]')) {
+				const path = row.dataset.treePath ?? '';
+				row.hidden = [...collapsed].some(
+					(directory) => path !== directory && path.startsWith(`${directory}/`),
+				);
+			}
+			for (const button of tree.querySelectorAll<HTMLButtonElement>('[data-tree-toggle]')) {
+				const path = button.dataset.treeToggle ?? '';
+				button.setAttribute('aria-expanded', String(!collapsed.has(path)));
+			}
+		}
+	};
+
+	for (const [treeId, trees] of treeGroups) {
+		const collapsed = readCollapsedPaths(treeId);
+		for (const tree of trees) {
+			const activePath = tree.dataset.activePath ?? '';
+			for (const path of [...collapsed]) {
+				if (activePath.startsWith(`${path}/`)) collapsed.delete(path);
+			}
+		}
+
+		for (const tree of trees) {
+			for (const button of tree.querySelectorAll<HTMLButtonElement>('[data-tree-toggle]')) {
+				button.addEventListener('click', () => {
+					const path = button.dataset.treeToggle;
+					if (!path) return;
+					if (collapsed.has(path)) {
+						collapsed.delete(path);
+					} else {
+						collapsed.add(path);
+					}
+					writeCollapsedPaths(treeId, collapsed);
+					refreshTrees(trees, collapsed);
+				});
+			}
+		}
+		writeCollapsedPaths(treeId, collapsed);
+		refreshTrees(trees, collapsed);
+	}
+</script>
+
+<style>
+	.source-tree {
+		margin: 0;
+		padding: 0.15rem 0 0;
+		list-style: none;
+	}
+
+	.tree-row {
+		position: relative;
+		margin: 0;
+		padding-left: calc(var(--tree-depth) * 0.68rem);
+	}
+
+	.directory-toggle,
+	a {
+		display: grid;
+		grid-template-columns: 0.46rem 0.82rem minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 0.35rem;
+		width: 100%;
+		min-height: 1.7rem;
+		padding: 0.2rem 0.28rem;
+		font-family: var(--font-mono);
+		line-height: 1.25;
+		text-align: left;
+		background: transparent;
+		border-left: 2px solid transparent;
+		border-top: 0;
+		border-right: 0;
+		border-bottom: 0;
+		border-radius: 4px;
+	}
+
+	.directory-toggle {
+		color: rgb(var(--gray-dark));
+		font-size: 0.64rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.directory.branch > .directory-toggle {
+		color: var(--accent-dark);
+	}
+
+	.directory-toggle:hover {
+		color: var(--accent-dark);
+		background: rgba(239, 236, 250, 0.55);
+	}
+
+	.tree-chevron {
+		display: block;
+		color: rgb(var(--gray));
+		font-size: 0.78rem;
+		line-height: 1;
+		transform: rotate(0deg);
+		transform-origin: center;
+		transition: transform 0.16s ease;
+	}
+
+	.directory-toggle[aria-expanded='true'] .tree-chevron {
+		transform: rotate(90deg);
+	}
+
+	.folder-mark {
+		position: relative;
+		display: block;
+		width: 0.74rem;
+		height: 0.54rem;
+		background: var(--lavender-soft);
+		border: 1px solid rgba(139, 124, 197, 0.62);
+		border-radius: 2px;
+	}
+
+	.folder-mark::before {
+		position: absolute;
+		top: -0.22rem;
+		left: 0.06rem;
+		width: 0.31rem;
+		height: 0.2rem;
+		content: '';
+		background: var(--lavender-soft);
+		border: 1px solid rgba(139, 124, 197, 0.62);
+		border-bottom: 0;
+		border-radius: 2px 2px 0 0;
+	}
+
+	a {
+		color: rgb(var(--gray));
+		font-size: 0.6rem;
+		text-decoration: none;
+	}
+
+	.tree-spacer {
+		display: block;
+	}
+
+	a:hover,
+	a.active {
+		color: var(--accent-dark);
+		background: rgba(227, 245, 240, 0.72);
+		border-left-color: var(--accent);
+	}
+
+	.file-mark {
+		display: block;
+		width: 0.62rem;
+		height: 0.78rem;
+		background: rgba(var(--surface), 0.9);
+		border: 1px solid rgba(102, 191, 174, 0.72);
+		border-radius: 1px 3px 2px 2px;
+		box-shadow: inset -0.14rem 0.14rem 0 var(--accent-soft);
+	}
+
+	.file-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	a small {
+		font-size: 0.46rem;
+		opacity: 0.68;
+	}
+
+	@media (max-width: 1280px) {
+		.tree-row {
+			padding-left: calc(var(--tree-depth) * 0.82rem);
+		}
+
+		.directory-toggle,
+		a {
+			font-size: 0.68rem;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.tree-chevron {
+			transition: none;
+		}
+	}
+</style>

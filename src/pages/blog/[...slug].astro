@@ -2,6 +2,7 @@
 import { type CollectionEntry, getCollection, render } from 'astro:content';
 import { ARTICLE_SECTIONS } from '../../articleSections';
 import BlogPost from '../../layouts/BlogPost.astro';
+import { getArticleSourceFiles } from '../../sourceFiles';
 
 export async function getStaticPaths() {
 	const posts = await getCollection('articles', ({ data }) => data.section !== 'app-lab');
@@ -15,8 +16,15 @@ type Props = CollectionEntry<'articles'>;
 const post = Astro.props;
 const { Content, headings } = await render(post);
 const category = ARTICLE_SECTIONS[post.data.section]?.title ?? post.data.section;
+const sourceFiles = getArticleSourceFiles(post.data.sourceDir);
 ---
 
-<BlogPost {...post.data} category={category} headings={headings}>
+<BlogPost
+	{...post.data}
+	articleSlug={post.id}
+	category={category}
+	headings={headings}
+	sourceFiles={sourceFiles}
+>
 	<Content />
 </BlogPost>

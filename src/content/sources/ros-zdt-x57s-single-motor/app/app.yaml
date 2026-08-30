@@ -1,0 +1,21 @@
+name: ROS ZDT X57S Single Motor
+description: Combine the ROS WebSocket and single-motor ZDT X57S CAN Bricks.
+ports: []
+bricks:
+  - ros_gateway:
+      variables:
+        ROS_GATEWAY_HOST: "0.0.0.0"
+        ROS_GATEWAY_PORT: "8765"
+        ROS_GATEWAY_PATH: "/ros"
+        ROS_GATEWAY_NODE_NAME: "ros-zdt-x57s-single-motor"
+        ROS_GATEWAY_MAX_MOTOR_RPM: "60"
+        ROS_GATEWAY_COMMAND_TIMEOUT_MS: "300"
+        ROS_GATEWAY_HEARTBEAT_TIMEOUT_MS: "3000"
+  - zdt_x57s_can:
+      variables:
+        ZDT_CAN_GATEWAY_HOST: "msgpack-rpc-router"
+        ZDT_CAN_GATEWAY_PORT: "8766"
+        ZDT_CAN_GATEWAY_TOKEN: "<随机令牌>"
+        ZDT_CAN_REQUEST_TIMEOUT_S: "1.5"
+        ZDT_MOTOR_ID: "1"
+icon: 🔗

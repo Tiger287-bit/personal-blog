@@ -1,0 +1,8 @@
+ventuno_zdt_motor_bridge:
+  ros__parameters:
+    websocket_url: ws://127.0.0.1:8765/ros
+    reconnect_interval: 2.0
+    heartbeat_interval: 1.0
+    command_timeout: 0.3
+    acceleration_level: 10
+    maximum_rpm: 60

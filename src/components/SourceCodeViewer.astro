@@ -1,0 +1,157 @@
+---
+import type { ArticleSourceFile } from '../sourceFiles';
+
+interface Props {
+	file: ArticleSourceFile;
+}
+
+const { file } = Astro.props;
+const lines = file.content.split('\n');
+---
+
+<div class="source-toolbar">
+	<div>
+		<span>{file.language}</span>
+		<small>{file.lineCount} 行</small>
+	</div>
+	<button type="button" data-copy-source>复制源码</button>
+</div>
+
+<div class="source-code" tabindex="0" aria-label={`${file.path} 源码`} data-source-code>
+	<ol>
+		{lines.map((line) => <li><code data-source-line>{line}</code></li>)}
+	</ol>
+</div>
+
+<p class="copy-status" role="status" aria-live="polite" data-copy-status></p>
+
+<script>
+	const copyButton = document.querySelector<HTMLButtonElement>('[data-copy-source]');
+	const copyStatus = document.querySelector<HTMLElement>('[data-copy-status]');
+	const sourceLines = Array.from(document.querySelectorAll<HTMLElement>('[data-source-line]'));
+
+	copyButton?.addEventListener('click', async () => {
+		const source = sourceLines.map((line) => line.textContent ?? '').join('\n');
+		try {
+			await navigator.clipboard.writeText(source);
+			copyButton.textContent = '已复制';
+			if (copyStatus) copyStatus.textContent = '源码已复制到剪贴板。';
+		} catch {
+			if (copyStatus) copyStatus.textContent = '浏览器未允许复制，请手动选择源码。';
+		}
+	});
+</script>
+
+<style>
+	.source-toolbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.78rem 1rem;
+		color: #dcebe8;
+		background: #1e2a3e;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 14px 14px 0 0;
+	}
+
+	.source-toolbar div {
+		display: flex;
+		align-items: baseline;
+		gap: 0.7rem;
+	}
+
+	.source-toolbar span,
+	.source-toolbar small,
+	.source-toolbar button {
+		font-family: var(--font-mono);
+	}
+
+	.source-toolbar span {
+		font-size: 0.72rem;
+		font-weight: 700;
+	}
+
+	.source-toolbar small {
+		color: #9fb6b2;
+		font-size: 0.6rem;
+	}
+
+	.source-toolbar button {
+		padding: 0.36rem 0.62rem;
+		color: #dff8f2;
+		font-size: 0.62rem;
+		font-weight: 700;
+		cursor: pointer;
+		background: rgba(102, 191, 174, 0.16);
+		border: 1px solid rgba(102, 191, 174, 0.45);
+		border-radius: 6px;
+	}
+
+	.source-toolbar button:hover {
+		background: rgba(102, 191, 174, 0.28);
+	}
+
+	.source-code {
+		max-height: none;
+		overflow: auto;
+		color: #edf8f5;
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		line-height: 1.65;
+		tab-size: 4;
+		background: #24324a;
+		border-radius: 0 0 14px 14px;
+		scrollbar-color: var(--accent) rgba(255, 255, 255, 0.08);
+	}
+
+	.source-code ol {
+		min-width: max-content;
+		margin: 0;
+		padding: 1.2rem 1.5rem 1.2rem 4.4rem;
+		counter-reset: source-line;
+	}
+
+	.source-code li {
+		min-height: 1.65em;
+		padding: 0 1.2rem;
+		white-space: pre;
+		counter-increment: source-line;
+	}
+
+	.source-code li::marker {
+		content: counter(source-line);
+		color: #74889e;
+		font-size: 0.68rem;
+	}
+
+	.source-code li:hover {
+		background: rgba(102, 191, 174, 0.08);
+	}
+
+	.source-code code {
+		all: unset;
+		font-family: inherit;
+	}
+
+	.copy-status {
+		min-height: 1.4rem;
+		margin: 0.55rem 0 0;
+		color: rgb(var(--gray));
+		font-size: 0.68rem;
+	}
+
+	@media (max-width: 620px) {
+		.source-code {
+			font-size: 0.7rem;
+		}
+
+		.source-code ol {
+			padding-left: 3.5rem;
+		}
+
+		.source-code li {
+			padding-right: 0.75rem;
+		}
+	}
+</style>

@@ -1,0 +1,11 @@
+name: ZDT X57S CAN Test
+description: Safely verify ZDT X57S second-generation FW_Emm motors.
+ports: []
+bricks:
+  - zdt_x57s_can:
+      variables:
+        ZDT_CAN_GATEWAY_HOST: "msgpack-rpc-router"
+        ZDT_CAN_GATEWAY_PORT: "8766"
+        ZDT_CAN_GATEWAY_TOKEN: "<随机令牌>"
+        ZDT_CAN_REQUEST_TIMEOUT_S: "1.5"
+icon: ⚙️
