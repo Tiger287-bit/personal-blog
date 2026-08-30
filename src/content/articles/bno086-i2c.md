@@ -1,7 +1,7 @@
 ---
 title: "BNO086 I2C 接线与调试记录"
 description: "记录 BNO086 的接线方法和常见问题。"
-category: "嵌入式与硬件"
+section: "embedded-hardware"
 pubDate: "2026-08-23"
 ---
 

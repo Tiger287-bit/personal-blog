@@ -2,37 +2,48 @@
 import { getCollection } from 'astro:content';
 import BaseHead from '../../components/BaseHead.astro';
 import Footer from '../../components/Footer.astro';
-import FormattedDate from '../../components/FormattedDate.astro';
 import Header from '../../components/Header.astro';
+import {
+	ARTICLE_SECTIONS,
+	type ArticleSectionDefinition,
+} from '../../articleSections';
 import { SITE_TITLE } from '../../consts';
 
-const posts = (await getCollection('blog')).sort(
-	(a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
-);
+interface SectionCard extends ArticleSectionDefinition {
+	id: string;
+	articleCount: number;
+}
 
-const groupedPosts = posts.reduce(
-	(groups, post) => {
-		const category = post.data.category;
-
-		if (!groups[category]) {
-			groups[category] = [];
-		}
-
-		groups[category].push(post);
-		return groups;
+const entries = await getCollection('articles');
+const sectionCounts = entries.reduce(
+	(counts, entry) => {
+		counts[entry.data.section] = (counts[entry.data.section] ?? 0) + 1;
+		return counts;
 	},
-	{} as Record<string, typeof posts>,
+	{} as Record<string, number>,
 );
-
-const categoryEntries = Object.entries(groupedPosts);
+const sections: SectionCard[] = Object.entries(sectionCounts)
+	.map(([sectionId, articleCount]) => ({
+		id: sectionId,
+		articleCount,
+		...(ARTICLE_SECTIONS[sectionId] ?? {
+			title: sectionId,
+			label: 'TOPIC COLLECTION',
+			description: `收录属于“${sectionId}”板块的教程与说明。`,
+			tone: 'general' as const,
+			order: 1000,
+		}),
+	}))
+	.sort((a, b) => a.order - b.order);
+const articleCount = entries.length;
 ---
 
 <!doctype html>
 <html lang="zh-CN">
 	<head>
 		<BaseHead
-			title={`文章分类 | ${SITE_TITLE}`}
-			description="按分类查看咸鱼哥知识小库的实践文章"
+			title={`文章板块 | ${SITE_TITLE}`}
+			description="按主题板块进入咸鱼哥知识小库中的教程文章"
 		/>
 	</head>
 
@@ -42,56 +53,47 @@ const categoryEntries = Object.entries(groupedPosts);
 		<main>
 			<header class="archive-heading">
 				<div>
-					<p class="section-label">文章分类</p>
-					<h1>翻一翻研究手记</h1>
-					<p class="intro">按主题收好每一次调试、验证和复盘，找到你正在处理的那类问题。</p>
+					<p class="section-label">教程书架</p>
+					<h1>先选择板块，<br />再找到需要的教程。</h1>
+					<p class="intro">
+						这里不再堆叠所有文章。每个资料夹代表一个独立板块，进入后才显示其中的教程。
+					</p>
 				</div>
-				<div class="archive-summary">
+				<div class="archive-summary" aria-label="文章收录统计">
 					<span aria-hidden="true"></span>
-					<strong>已收录 {posts.length} 篇</strong>
-					<small>分为 {categoryEntries.length} 个主题</small>
+					<strong>{sections.length} 个板块</strong>
+					<small>共收录 {articleCount} 篇文章</small>
 				</div>
 			</header>
 
 			{
-				categoryEntries.length > 0 ? (
-					<div class="category-grid">
-						{categoryEntries.map(([category, categoryPosts]) => (
-							<section class="category-card">
-								<header class="category-header">
-									<div>
-										<span class="folder-mark" aria-hidden="true"></span>
-										<h2>{category}</h2>
-									</div>
-									<span class="count">{categoryPosts.length} 篇手记</span>
+				sections.length > 0 ? (
+					<section class="section-directory" aria-label="文章板块">
+						{sections.map((section) => (
+							<a
+								class:list={['section-card', `tone-${section.tone}`]}
+								href={`/blog/sections/${section.id}/`}
+							>
+								<span class="folder-tab" aria-hidden="true"></span>
+								<header>
+									<p>{section.label}</p>
+									<small>{section.articleCount} 篇教程</small>
 								</header>
-
-								<ul>
-									{categoryPosts.map((post) => (
-										<li>
-											<a class="article-link" href={`/blog/${post.id}/`}>
-												<div class="article-copy">
-													<h3>{post.data.title}</h3>
-													<p>{post.data.description}</p>
-												</div>
-												<div class="article-meta">
-													<span><FormattedDate date={post.data.pubDate} /></span>
-													<svg viewBox="0 0 20 20" aria-hidden="true">
-														<path d="M4 10h11M11 6l4 4-4 4" />
-													</svg>
-												</div>
-											</a>
-										</li>
-									))}
-								</ul>
-							</section>
+								<h2>{section.title}</h2>
+								<p class="section-description">{section.description}</p>
+								<footer>
+									<span>打开板块</span>
+									<svg viewBox="0 0 24 24" aria-hidden="true">
+										<path d="M5 12h13M14 7l5 5-5 5" />
+									</svg>
+								</footer>
+							</a>
 						))}
-					</div>
+					</section>
 				) : (
 					<div class="empty-state">
-						<span aria-hidden="true">⌁</span>
-						<h2>研究日志已经准备好了</h2>
-						<p>第一篇实践文章发布后，会出现在这里。</p>
+						<h2>文章书架已经准备好了</h2>
+						<p>加入第一篇教程后，它会出现在所属板块中。</p>
 					</div>
 				)
 			}
@@ -111,16 +113,17 @@ const categoryEntries = Object.entries(groupedPosts);
 		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: end;
 		gap: 3rem;
-		margin-bottom: 4.5rem;
+		margin-bottom: 5rem;
 	}
 
 	.archive-heading h1 {
+		max-width: 850px;
 		margin-bottom: 1rem;
-		font-size: clamp(2.8rem, 7vw, 4.8rem);
+		font-size: clamp(2.75rem, 6.7vw, 4.7rem);
 	}
 
 	.intro {
-		max-width: 610px;
+		max-width: 670px;
 		margin: 0;
 		color: rgb(var(--gray));
 		font-size: 1.02rem;
@@ -129,7 +132,7 @@ const categoryEntries = Object.entries(groupedPosts);
 	.archive-summary {
 		position: relative;
 		display: flex;
-		min-width: 10.5rem;
+		min-width: 11rem;
 		padding: 1.1rem 1.2rem;
 		flex-direction: column;
 		background: white;
@@ -157,165 +160,145 @@ const categoryEntries = Object.entries(groupedPosts);
 	.archive-summary small {
 		margin-top: 0.25rem;
 		color: rgb(var(--gray));
-		font-size: 0.7rem;
+		font-size: 0.68rem;
 	}
 
-	.category-grid {
+	.section-directory {
 		display: grid;
-		gap: 2rem;
+		grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr));
+		gap: clamp(1.5rem, 4vw, 2.25rem);
+		margin-bottom: 4rem;
 	}
 
-	.category-card {
+	.section-card {
 		position: relative;
-		overflow: visible;
-		background: rgba(var(--surface), 0.96);
+		display: flex;
+		min-height: 310px;
+		padding: 2rem;
+		color: rgb(var(--gray-dark));
+		text-decoration: none;
+		flex-direction: column;
+		background:
+			linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(239, 236, 250, 0.6));
 		border: 1px solid rgb(var(--gray-light));
-		border-radius: 0 var(--radius-md) var(--radius-md) var(--radius-md);
+		border-radius: 8px var(--radius-md) var(--radius-md) var(--radius-md);
 		box-shadow: var(--shadow-soft);
+		transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 	}
 
-	.category-card::before {
+	.section-card.tone-lab {
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(227, 245, 240, 0.72));
+	}
+
+	.section-card.tone-hardware {
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(252, 236, 240, 0.72));
+	}
+
+	.folder-tab {
 		position: absolute;
-		top: -0.75rem;
+		top: -0.95rem;
 		left: -1px;
-		width: 7rem;
-		height: 0.78rem;
-		content: "";
-		background: var(--accent);
-		border: 1px solid rgba(51, 127, 112, 0.2);
-		border-bottom: 0;
-		border-radius: 8px 12px 0 0;
-	}
-
-	.category-card:nth-child(3n + 2)::before {
+		width: 44%;
+		height: 1rem;
 		background: var(--lavender);
+		border-radius: 8px 18px 0 0;
+		transition: width 0.2s ease;
 	}
 
-	.category-card:nth-child(3n)::before {
+	.tone-lab .folder-tab {
+		background: var(--accent);
+	}
+
+	.tone-hardware .folder-tab {
 		background: var(--sakura);
 	}
 
-	.category-header {
+	.section-card:hover {
+		color: rgb(var(--gray-dark));
+		border-color: rgba(102, 191, 174, 0.68);
+		box-shadow: var(--shadow-paper);
+		transform: translateY(-4px) rotate(-0.25deg);
+	}
+
+	.section-card:hover .folder-tab {
+		width: 52%;
+	}
+
+	.section-card:focus-visible {
+		outline: 3px solid rgba(102, 191, 174, 0.48);
+		outline-offset: 4px;
+	}
+
+	.section-card header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		padding: 1.4rem 1.5rem;
-		background: linear-gradient(90deg, var(--accent-soft), rgba(227, 245, 240, 0.22));
-		border-bottom: 1px solid rgb(var(--gray-light));
-		border-radius: 0 var(--radius-md) 0 0;
+		margin-bottom: 2.2rem;
 	}
 
-	.category-card:nth-child(3n + 2) .category-header {
-		background: linear-gradient(90deg, var(--lavender-soft), rgba(239, 236, 250, 0.22));
-	}
-
-	.category-card:nth-child(3n) .category-header {
-		background: linear-gradient(90deg, var(--sakura-soft), rgba(252, 236, 240, 0.22));
-	}
-
-	.category-header > div {
-		display: flex;
-		align-items: center;
-		gap: 0.8rem;
-	}
-
-	.folder-mark {
-		width: 0.72rem;
-		height: 0.72rem;
-		background: var(--accent);
-		border-radius: 3px 50% 50%;
-		transform: rotate(10deg);
-	}
-
-	.category-card:nth-child(3n + 2) .folder-mark {
-		background: var(--lavender);
-	}
-
-	.category-card:nth-child(3n) .folder-mark {
-		background: var(--sakura);
-	}
-
-	.category-header h2 {
+	.section-card header p {
 		margin: 0;
-		font-size: 1.45rem;
+		color: var(--accent-dark);
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		font-weight: 700;
+		letter-spacing: 0.1em;
 	}
 
-	.count {
-		padding: 0.2rem 0.6rem;
+	.section-card header small {
+		padding: 0.22rem 0.55rem;
 		color: rgb(var(--gray-dark));
-		font-size: 0.68rem;
+		font-size: 0.6rem;
 		font-weight: 700;
 		background: rgba(255, 255, 255, 0.8);
-		border: 1px solid rgba(var(--gray-light), 0.9);
+		border: 1px solid rgba(var(--gray-light), 0.95);
 		border-radius: 999px;
-	}
-
-	ul {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	li + li {
-		border-top: 1px solid rgb(var(--gray-light));
-	}
-
-	.article-link {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		align-items: center;
-		gap: 2rem;
-		padding: 1.45rem 1.5rem;
-		color: rgb(var(--gray-dark));
-		text-decoration: none;
-		transition: background 0.18s ease;
-	}
-
-	.article-link:hover {
-		color: rgb(var(--gray-dark));
-		background: rgba(var(--paper), 0.7);
-	}
-
-	.article-copy h3 {
-		margin: 0 0 0.35rem;
-		font-size: 1.16rem;
-		transition: color 0.18s ease;
-	}
-
-	.article-link:hover h3 {
-		color: var(--accent-dark);
-	}
-
-	.article-copy p {
-		margin: 0;
-		color: rgb(var(--gray));
-		font-size: 0.84rem;
-		line-height: 1.6;
-	}
-
-	.article-meta {
-		display: flex;
-		align-items: center;
-		gap: 1.15rem;
-		color: rgb(var(--gray));
-		font-size: 0.68rem;
 		white-space: nowrap;
 	}
 
-	.article-meta svg {
-		width: 1.05rem;
+	.section-card h2 {
+		margin: 0 0 0.75rem;
+		font-size: clamp(1.75rem, 4vw, 2.45rem);
+		transition: color 0.18s ease;
+	}
+
+	.section-card:hover h2 {
+		color: var(--accent-dark);
+	}
+
+	.section-description {
+		max-width: 32rem;
+		margin: 0;
+		color: rgb(var(--gray));
+		font-size: 0.84rem;
+		line-height: 1.7;
+	}
+
+	.section-card footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-top: auto;
+		padding-top: 2rem;
+		color: rgb(var(--black));
+		font-size: 0.76rem;
+		font-weight: 700;
+	}
+
+	.section-card footer svg {
+		width: 1.25rem;
 		fill: none;
-		stroke: rgb(var(--black));
+		stroke: currentColor;
 		stroke-linecap: round;
 		stroke-linejoin: round;
 		stroke-width: 1.7;
-		transition: stroke 0.18s ease, transform 0.18s ease;
+		transition: transform 0.18s ease;
 	}
 
-	.article-link:hover .article-meta svg {
-		stroke: var(--lavender);
-		transform: translateX(3px);
+	.section-card:hover footer svg {
+		transform: translateX(4px);
 	}
 
 	.empty-state {
@@ -324,13 +307,6 @@ const categoryEntries = Object.entries(groupedPosts);
 		background: white;
 		border: 1px dashed rgb(var(--gray-light));
 		border-radius: var(--radius-md);
-	}
-
-	.empty-state > span {
-		display: block;
-		margin-bottom: 1rem;
-		color: var(--accent);
-		font-size: 2.5rem;
 	}
 
 	.empty-state h2 {
@@ -342,6 +318,14 @@ const categoryEntries = Object.entries(groupedPosts);
 		color: rgb(var(--gray));
 	}
 
+	@media (prefers-reduced-motion: reduce) {
+		.section-card,
+		.folder-tab,
+		.section-card footer svg {
+			transition: none;
+		}
+	}
+
 	@media (max-width: 720px) {
 		main {
 			padding-top: 3rem;
@@ -350,25 +334,20 @@ const categoryEntries = Object.entries(groupedPosts);
 		.archive-heading {
 			grid-template-columns: 1fr;
 			gap: 2rem;
-			margin-bottom: 3.5rem;
+			margin-bottom: 4rem;
 		}
 
 		.archive-summary {
 			justify-self: start;
 		}
 
-		.category-header {
-			padding: 1.15rem 1rem;
+		.section-directory {
+			gap: 1.8rem;
 		}
 
-		.article-link {
-			grid-template-columns: 1fr;
-			gap: 0.85rem;
-			padding: 1.2rem 1rem;
-		}
-
-		.article-meta {
-			justify-content: space-between;
+		.section-card {
+			min-height: 280px;
+			padding: 1.5rem;
 		}
 	}
 </style>

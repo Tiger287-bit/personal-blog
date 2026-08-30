@@ -1,0 +1,75 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+type Status = NonNullable<CollectionEntry<'articles'>['data']['status']>;
+
+interface Props {
+	status: Status;
+	compact?: boolean;
+}
+
+const { status, compact = false } = Astro.props;
+const labels: Record<Status, string> = {
+	planned: '规划中',
+	'in-progress': '开发中',
+	verified: '已实测',
+};
+---
+
+<span class:list={['app-status', status, { compact }]}>
+	<span aria-hidden="true"></span>
+	{labels[status]}
+</span>
+
+<style>
+	.app-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		width: fit-content;
+		padding: 0.28rem 0.62rem;
+		color: #5f568f;
+		font-size: 0.7rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		background: var(--lavender-soft);
+		border: 1px solid rgba(139, 124, 197, 0.28);
+		border-radius: 999px;
+	}
+
+	.app-status > span {
+		width: 0.48rem;
+		height: 0.48rem;
+		background: var(--lavender);
+		border: 2px solid white;
+		border-radius: 50%;
+		box-shadow: 0 0 0 1px rgba(139, 124, 197, 0.36);
+	}
+
+	.app-status.in-progress {
+		color: #9a5062;
+		background: var(--sakura-soft);
+		border-color: rgba(242, 169, 184, 0.42);
+	}
+
+	.app-status.in-progress > span {
+		background: var(--sakura);
+		box-shadow: 0 0 0 1px rgba(242, 169, 184, 0.55);
+	}
+
+	.app-status.verified {
+		color: var(--accent-dark);
+		background: var(--accent-soft);
+		border-color: rgba(102, 191, 174, 0.4);
+	}
+
+	.app-status.verified > span {
+		background: var(--accent);
+		box-shadow: 0 0 0 1px rgba(102, 191, 174, 0.55);
+	}
+
+	.app-status.compact {
+		padding: 0.2rem 0.5rem;
+		font-size: 0.64rem;
+	}
+</style>

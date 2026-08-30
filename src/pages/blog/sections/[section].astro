@@ -1,0 +1,429 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { getCollection } from 'astro:content';
+import AppStatusBadge from '../../../components/AppStatusBadge.astro';
+import BaseHead from '../../../components/BaseHead.astro';
+import Footer from '../../../components/Footer.astro';
+import FormattedDate from '../../../components/FormattedDate.astro';
+import Header from '../../../components/Header.astro';
+import {
+	ARTICLE_SECTIONS,
+	type ArticleSectionDefinition,
+} from '../../../articleSections';
+import { SITE_TITLE } from '../../../consts';
+
+interface Props {
+	sectionId: string;
+	articles: CollectionEntry<'articles'>[];
+}
+
+export async function getStaticPaths() {
+	const entries = await getCollection('articles');
+	const sectionIds = [...new Set(entries.map((entry) => entry.data.section))];
+
+	return sectionIds.map((sectionId) => ({
+		params: { section: sectionId },
+		props: {
+			sectionId,
+			articles: entries.filter((entry) => entry.data.section === sectionId),
+		},
+	}));
+}
+
+const { sectionId, articles: sourceArticles } = Astro.props;
+const section: ArticleSectionDefinition = ARTICLE_SECTIONS[sectionId] ?? {
+	title: sectionId,
+	label: 'TOPIC COLLECTION',
+	description: `收录属于“${sectionId}”板块的教程与说明。`,
+	tone: 'general',
+	order: 1000,
+};
+const articles = [...sourceArticles].sort((a, b) => {
+	if (sectionId === 'app-lab') {
+		return (a.data.order ?? Number.MAX_SAFE_INTEGER) - (b.data.order ?? Number.MAX_SAFE_INTEGER);
+	}
+	return b.data.pubDate.valueOf() - a.data.pubDate.valueOf();
+});
+
+/*
+ * @description         : 根据文章所属板块生成文章详情页地址
+ * @param article       : 当前板块中的文章内容条目
+ * @return              : App Lab 或普通教程对应的公开访问地址
+ */
+function getArticleHref(article: CollectionEntry<'articles'>) {
+	return article.data.section === 'app-lab'
+		? `/app-lab/${article.id}/`
+		: `/blog/${article.id}/`;
+}
+---
+
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<BaseHead
+			title={`${section.title} | ${SITE_TITLE}`}
+			description={section.description}
+		/>
+	</head>
+
+	<body>
+		<Header />
+
+		<main>
+			<nav class="breadcrumb" aria-label="面包屑导航">
+				<a href="/blog">文章板块</a>
+				<span aria-hidden="true">/</span>
+				<strong>{section.title}</strong>
+			</nav>
+
+			<header class:list={['section-hero', `tone-${section.tone}`]}>
+				<div class="folder-tab" aria-hidden="true"></div>
+				<div>
+					<p>{section.label}</p>
+					<h1>{section.title}</h1>
+					<span>{section.description}</span>
+				</div>
+				<aside aria-label="板块文章统计">
+					<strong>{articles.length}</strong>
+					<small>篇教程</small>
+				</aside>
+			</header>
+
+			<section class="article-area" aria-labelledby="article-list-title">
+				<header class="list-heading">
+					<div>
+						<p class="section-label">板块内容</p>
+						<h2 id="article-list-title">选择一篇教程开始</h2>
+					</div>
+					<a href="/blog">返回全部板块</a>
+				</header>
+
+				<div class="article-grid">
+					{
+						articles.map((article) => {
+							const tags = article.data.capabilities.length > 0
+								? article.data.capabilities
+								: [section.title];
+
+							return (
+								<a class="article-card" href={getArticleHref(article)}>
+									<div class="card-meta">
+										{article.data.status ? (
+											<AppStatusBadge status={article.data.status} compact />
+										) : (
+											<span class="topic-label">教程</span>
+										)}
+										<FormattedDate date={article.data.updatedDate ?? article.data.pubDate} />
+									</div>
+									{article.data.appId && <code>{article.data.appId}</code>}
+									<h3>{article.data.title}</h3>
+									<p>{article.data.description}</p>
+									<footer>
+										<ul>
+											{tags.slice(0, 4).map((tag) => <li>{tag}</li>)}
+										</ul>
+										<span aria-hidden="true">↗</span>
+									</footer>
+								</a>
+							);
+						})
+					}
+				</div>
+			</section>
+		</main>
+
+		<Footer />
+	</body>
+</html>
+
+<style>
+	main {
+		padding-top: 2.5rem;
+	}
+
+	.breadcrumb {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		margin-bottom: 2.7rem;
+		color: rgb(var(--gray));
+		font-size: 0.72rem;
+	}
+
+	.breadcrumb a {
+		color: var(--accent-dark);
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.breadcrumb a:hover {
+		text-decoration: underline;
+		text-underline-offset: 0.2rem;
+	}
+
+	.breadcrumb strong {
+		color: rgb(var(--gray-dark));
+	}
+
+	.section-hero {
+		position: relative;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: end;
+		gap: 2rem;
+		margin-bottom: 4.5rem;
+		padding: clamp(2rem, 6vw, 4.25rem);
+		background: linear-gradient(135deg, white, var(--lavender-soft));
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 10px var(--radius-lg) var(--radius-lg) var(--radius-lg);
+		box-shadow: var(--shadow-soft);
+	}
+
+	.section-hero.tone-lab {
+		background: linear-gradient(135deg, white, var(--accent-soft));
+	}
+
+	.section-hero.tone-hardware {
+		background: linear-gradient(135deg, white, var(--sakura-soft));
+	}
+
+	.folder-tab {
+		position: absolute;
+		top: -1.1rem;
+		left: 0;
+		width: min(15rem, 42%);
+		height: 1.15rem;
+		background: var(--lavender);
+		border-radius: 9px 18px 0 0;
+	}
+
+	.tone-lab .folder-tab {
+		background: var(--accent);
+	}
+
+	.tone-hardware .folder-tab {
+		background: var(--sakura);
+	}
+
+	.section-hero p {
+		margin: 0 0 0.7rem;
+		color: var(--accent-dark);
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		font-weight: 700;
+		letter-spacing: 0.12em;
+	}
+
+	.section-hero h1 {
+		margin: 0;
+		font-size: clamp(2.6rem, 7vw, 5rem);
+	}
+
+	.section-hero > div > span {
+		display: block;
+		max-width: 680px;
+		margin-top: 1rem;
+		color: rgb(var(--gray));
+		font-size: 0.95rem;
+	}
+
+	.section-hero aside {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.75rem 1rem;
+		background: rgba(255, 255, 255, 0.78);
+		border: 1px solid rgba(var(--gray-light), 0.9);
+		border-radius: 12px;
+	}
+
+	.section-hero aside strong {
+		font-family: var(--font-display);
+		font-size: 1.65rem;
+		line-height: 1;
+	}
+
+	.section-hero aside small {
+		color: rgb(var(--gray));
+		font-size: 0.65rem;
+		white-space: nowrap;
+	}
+
+	.article-area {
+		margin-bottom: 4rem;
+	}
+
+	.list-heading {
+		display: flex;
+		align-items: end;
+		justify-content: space-between;
+		gap: 2rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.list-heading .section-label {
+		margin-bottom: 0.35rem;
+	}
+
+	.list-heading h2 {
+		margin: 0;
+		font-size: clamp(1.65rem, 4vw, 2.4rem);
+	}
+
+	.list-heading > a {
+		margin-bottom: 0.3rem;
+		color: rgb(var(--gray-dark));
+		font-size: 0.74rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.list-heading > a:hover {
+		color: var(--accent-dark);
+	}
+
+	.article-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+		gap: 1rem;
+	}
+
+	.article-card {
+		display: flex;
+		min-height: 305px;
+		padding: 1.5rem;
+		color: rgb(var(--gray-dark));
+		text-decoration: none;
+		flex-direction: column;
+		background: white;
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-soft);
+		transition: border-color 0.18s ease, transform 0.18s ease;
+	}
+
+	.article-card:hover {
+		color: rgb(var(--gray-dark));
+		border-color: rgba(102, 191, 174, 0.7);
+		transform: translateY(-2px);
+	}
+
+	.article-card:focus-visible {
+		outline: 3px solid rgba(102, 191, 174, 0.48);
+		outline-offset: 3px;
+	}
+
+	.card-meta {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1rem;
+		color: rgb(var(--gray));
+		font-size: 0.66rem;
+	}
+
+	.topic-label {
+		padding: 0.18rem 0.45rem;
+		color: var(--lavender);
+		font-size: 0.62rem;
+		font-weight: 700;
+		background: var(--lavender-soft);
+		border-radius: 5px;
+	}
+
+	.article-card > code {
+		align-self: flex-start;
+		margin-bottom: 0.75rem;
+		font-size: 0.62rem;
+	}
+
+	.article-card h3 {
+		margin: 0 0 0.65rem;
+		font-size: 1.28rem;
+		transition: color 0.18s ease;
+	}
+
+	.article-card:hover h3 {
+		color: var(--accent-dark);
+	}
+
+	.article-card > p {
+		margin: 0;
+		color: rgb(var(--gray));
+		font-size: 0.82rem;
+		line-height: 1.7;
+	}
+
+	.article-card footer {
+		display: flex;
+		align-items: end;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-top: auto;
+		padding-top: 1.4rem;
+	}
+
+	.article-card ul {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.article-card li {
+		padding: 0.14rem 0.38rem;
+		color: rgb(var(--gray));
+		font-size: 0.58rem;
+		background: rgb(var(--paper));
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 5px;
+	}
+
+	.article-card footer > span {
+		color: var(--lavender);
+		font-size: 1rem;
+		transition: transform 0.18s ease;
+	}
+
+	.article-card:hover footer > span {
+		transform: translate(2px, -2px);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.article-card,
+		.article-card footer > span {
+			transition: none;
+		}
+	}
+
+	@media (max-width: 680px) {
+		main {
+			padding-top: 2rem;
+		}
+
+		.section-hero {
+			grid-template-columns: 1fr;
+			align-items: start;
+			margin-bottom: 3.5rem;
+			padding: 2rem 1.25rem;
+		}
+
+		.section-hero aside {
+			justify-self: start;
+		}
+
+		.list-heading {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.65rem;
+		}
+
+		.article-card {
+			min-height: 270px;
+			padding: 1.25rem;
+		}
+	}
+</style>

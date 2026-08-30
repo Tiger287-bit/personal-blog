@@ -1,0 +1,356 @@
+---
+interface ArticleHeading {
+	depth: number;
+	slug: string;
+	text: string;
+}
+
+interface Props {
+	headings?: ArticleHeading[];
+}
+
+const { headings = [] } = Astro.props;
+const visibleHeadings = headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
+---
+
+{
+	visibleHeadings.length > 0 && (
+		<div class="toc-shell" data-toc-root>
+			<nav class="desktop-toc" aria-label="本文目录">
+				<div class="toc-heading">
+					<span aria-hidden="true"></span>
+					<div>
+						<small>ARTICLE INDEX</small>
+						<strong>本文目录</strong>
+					</div>
+				</div>
+				<ol class="toc-list">
+					{visibleHeadings.map((heading) => (
+						<li class:list={{ 'depth-three': heading.depth === 3 }}>
+							<a href={`#${heading.slug}`} data-toc-link={heading.slug}>
+								{heading.text}
+							</a>
+						</li>
+					))}
+				</ol>
+			</nav>
+
+			<details class="mobile-toc">
+				<summary>
+					<span>本文目录</span>
+					<small>{visibleHeadings.length} 个章节</small>
+				</summary>
+				<nav aria-label="移动端本文目录">
+					<ol class="toc-list">
+						{visibleHeadings.map((heading) => (
+							<li class:list={{ 'depth-three': heading.depth === 3 }}>
+								<a href={`#${heading.slug}`} data-toc-link={heading.slug}>
+									{heading.text}
+								</a>
+							</li>
+						))}
+					</ol>
+				</nav>
+			</details>
+		</div>
+	)
+}
+
+<script>
+	const tocRoots = document.querySelectorAll<HTMLElement>('[data-toc-root]');
+
+	tocRoots.forEach((root) => {
+		const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('[data-toc-link]'));
+		const slugs = [...new Set(links.map((link) => link.dataset.tocLink).filter(Boolean))];
+		const targets = slugs
+			.map((slug) => document.getElementById(slug as string))
+			.filter((heading): heading is HTMLElement => heading !== null);
+		let frameRequested = false;
+
+		/*
+		 * @description         : 同步桌面端和移动端目录中的当前章节状态
+		 * @param activeSlug     : 当前章节的标题锚点
+		 * @return               : 无返回值
+		 */
+		const activate = (activeSlug: string) => {
+			links.forEach((link) => {
+				const isActive = link.dataset.tocLink === activeSlug;
+				link.classList.toggle('is-active', isActive);
+				if (isActive) {
+					link.setAttribute('aria-current', 'location');
+				} else {
+					link.removeAttribute('aria-current');
+				}
+			});
+		};
+
+		/*
+		 * @description         : 根据标题相对视口的位置计算正在阅读的章节
+		 * @param               : 无参数
+		 * @return              : 无返回值
+		 */
+		const syncCurrentSection = () => {
+			frameRequested = false;
+			if (targets.length === 0) return;
+
+			const readingLine = Math.min(window.innerHeight * 0.24, 180);
+			let activeHeading = targets[0];
+			for (const heading of targets) {
+				if (heading.getBoundingClientRect().top <= readingLine) {
+					activeHeading = heading;
+				} else {
+					break;
+				}
+			}
+
+			if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 8) {
+				activeHeading = targets[targets.length - 1];
+			}
+			activate(activeHeading.id);
+		};
+
+		/*
+		 * @description         : 将高频滚动事件合并到下一次浏览器绘制
+		 * @param               : 无参数
+		 * @return              : 无返回值
+		 */
+		const requestSectionSync = () => {
+			if (frameRequested) return;
+			frameRequested = true;
+			window.requestAnimationFrame(syncCurrentSection);
+		};
+
+		window.addEventListener('scroll', requestSectionSync, { passive: true });
+		window.addEventListener('resize', requestSectionSync, { passive: true });
+		window.addEventListener('hashchange', requestSectionSync);
+
+		links.forEach((link) => {
+			link.addEventListener('click', () => {
+				const mobileToc = root.querySelector<HTMLDetailsElement>('.mobile-toc');
+				if (mobileToc && window.matchMedia('(max-width: 980px)').matches) {
+					mobileToc.open = false;
+				}
+			});
+		});
+
+		requestSectionSync();
+	});
+</script>
+
+<style>
+	.toc-shell {
+		height: 100%;
+		align-self: stretch;
+		min-width: 0;
+	}
+
+	.desktop-toc {
+		position: sticky;
+		top: calc(70px + 0.75rem);
+		z-index: 10;
+		max-height: calc(100vh - 70px - 1.5rem);
+		padding: 1rem 0.9rem 1rem 1rem;
+		overflow-y: auto;
+		background: rgba(var(--surface), 0.96);
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 10px 18px 14px 12px;
+		box-shadow: 5px 6px 0 var(--lavender-soft);
+		backdrop-filter: blur(12px);
+		scrollbar-width: thin;
+		scrollbar-color: var(--accent) transparent;
+	}
+
+	.toc-heading {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		margin-bottom: 0.8rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid rgb(var(--gray-light));
+	}
+
+	.toc-heading > span {
+		width: 0.65rem;
+		height: 1.9rem;
+		flex: 0 0 auto;
+		background: linear-gradient(180deg, var(--accent) 0 62%, var(--sakura) 62%);
+		border-radius: 999px 999px 4px 4px;
+		transform: rotate(3deg);
+	}
+
+	.toc-heading small,
+	.toc-heading strong {
+		display: block;
+	}
+
+	.toc-heading small {
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.52rem;
+		font-weight: 700;
+		letter-spacing: 0.11em;
+	}
+
+	.toc-heading strong {
+		margin-top: 0.08rem;
+		color: rgb(var(--black));
+		font-family: var(--font-display);
+		font-size: 0.92rem;
+	}
+
+	.toc-list {
+		position: relative;
+		margin: 0;
+		padding: 0 0 0 0.7rem;
+		list-style: none;
+	}
+
+	.toc-list::before {
+		position: absolute;
+		top: 0.45rem;
+		bottom: 0.45rem;
+		left: 0;
+		width: 1px;
+		content: '';
+		background: rgb(var(--gray-light));
+	}
+
+	.toc-list li {
+		margin: 0;
+	}
+
+	.toc-list a {
+		position: relative;
+		display: block;
+		padding: 0.38rem 0.25rem 0.38rem 0.55rem;
+		color: rgb(var(--gray));
+		font-size: 0.7rem;
+		font-weight: 600;
+		line-height: 1.35;
+		text-decoration: none;
+		transition: color 0.16s ease, transform 0.16s ease;
+	}
+
+	.toc-list a::before {
+		position: absolute;
+		top: 0.75rem;
+		left: -0.74rem;
+		width: 0.34rem;
+		height: 0.34rem;
+		content: '';
+		background: rgb(var(--surface));
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 50%;
+		transform: translateY(-50%);
+	}
+
+	.toc-list a:hover {
+		color: var(--accent-dark);
+		transform: translateX(2px);
+	}
+
+	.toc-list a.is-active {
+		color: var(--accent-dark);
+		font-weight: 700;
+	}
+
+	.toc-list a.is-active::before {
+		background: var(--accent);
+		border-color: white;
+		box-shadow: 0 0 0 2px rgba(102, 191, 174, 0.34);
+	}
+
+	.toc-list .depth-three a {
+		padding-left: 1.1rem;
+		font-size: 0.64rem;
+		font-weight: 500;
+	}
+
+	.mobile-toc {
+		display: none;
+		background: rgba(var(--surface), 0.95);
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 12px;
+		box-shadow: var(--shadow-soft);
+	}
+
+	.mobile-toc summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.9rem 1rem;
+		color: rgb(var(--black));
+		font-family: var(--font-display);
+		font-weight: 700;
+		cursor: pointer;
+		list-style: none;
+	}
+
+	.mobile-toc summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.mobile-toc summary small {
+		margin-left: auto;
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		font-weight: 500;
+	}
+
+	.mobile-toc summary::after {
+		display: grid;
+		width: 1.35rem;
+		height: 1.35rem;
+		place-items: center;
+		flex: 0 0 auto;
+		content: '+';
+		color: var(--accent-dark);
+		font-family: var(--font-mono);
+		font-size: 0.85rem;
+		background: var(--accent-soft);
+		border-radius: 50%;
+	}
+
+	.mobile-toc[open] summary::after {
+		content: '−';
+	}
+
+	.mobile-toc nav {
+		padding: 0.15rem 1rem 0.85rem;
+		border-top: 1px solid rgb(var(--gray-light));
+	}
+
+	@media (max-width: 980px) {
+		.toc-shell {
+			height: auto;
+		}
+
+		.desktop-toc {
+			display: none;
+		}
+
+		.mobile-toc {
+			display: block;
+		}
+
+		.toc-list {
+			padding-top: 0.5rem;
+		}
+
+		.toc-list a {
+			font-size: 0.78rem;
+		}
+
+		.toc-list .depth-three a {
+			font-size: 0.72rem;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.toc-list a {
+			transition: none;
+		}
+	}
+</style>

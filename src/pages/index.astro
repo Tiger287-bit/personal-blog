@@ -1,18 +1,34 @@
 ---
 import { getCollection } from 'astro:content';
+import AppStatusBadge from '../components/AppStatusBadge.astro';
 import BaseHead from '../components/BaseHead.astro';
 import FishMascot from '../components/FishMascot.astro';
 import Footer from '../components/Footer.astro';
 import FormattedDate from '../components/FormattedDate.astro';
 import Header from '../components/Header.astro';
+import { ARTICLE_SECTIONS } from '../articleSections';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 
-const posts = (await getCollection('blog')).sort(
+const allArticles = await getCollection('articles');
+const posts = allArticles.filter((entry) => entry.data.section !== 'app-lab').sort(
 	(a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
 );
 const recentPosts = posts.slice(0, 3);
 const featuredPost = recentPosts[0];
 const secondaryPosts = recentPosts.slice(1);
+const appLabEntries = allArticles
+	.filter((entry) => entry.data.section === 'app-lab')
+	.sort((a, b) => (a.data.order ?? Number.MAX_SAFE_INTEGER) - (b.data.order ?? Number.MAX_SAFE_INTEGER));
+const currentLabApp = appLabEntries.find((entry) => entry.data.status !== 'verified') ?? appLabEntries.at(-1);
+
+/*
+ * @description         : 根据文章所属板块标识获取用于页面展示的板块名称
+ * @param section       : 文章 frontmatter 中的稳定板块标识
+ * @return              : 已配置的板块名称，未配置时返回原始标识
+ */
+function getSectionTitle(section: string) {
+	return ARTICLE_SECTIONS[section]?.title ?? section;
+}
 ---
 
 <!doctype html>
@@ -28,7 +44,7 @@ const secondaryPosts = recentPosts.slice(1);
 					<p class="section-label">机器人 · 嵌入式 · 端侧 AI</p>
 					<h1>把调试现场，<br />写成能复用的<span>答案</span>。</h1>
 					<p class="hero-description">
-						这里是咸鱼哥的个人研究日志。记录真实问题、验证过程和最终结论，让下一次动手时有迹可循。
+						这里是咸鱼哥的个人技术教程库。围绕真实问题整理最终实现、关键代码和可复现步骤。
 					</p>
 					<div class="hero-actions">
 						<a class="primary-button" href="/blog">
@@ -41,11 +57,11 @@ const secondaryPosts = recentPosts.slice(1);
 					</div>
 				</div>
 
-				<aside class="journal-card" aria-label="咸鱼哥的研究日志">
+				<aside class="journal-card" aria-label="咸鱼哥的教程书架">
 					<span class="tape" aria-hidden="true"></span>
 					<div class="journal-heading">
 						<div>
-							<span>研究日志</span>
+							<span>教程索引</span>
 							<strong>今天也在认真排查问题</strong>
 						</div>
 						<small>OPEN</small>
@@ -66,11 +82,39 @@ const secondaryPosts = recentPosts.slice(1);
 				</aside>
 			</section>
 
+			<section class="app-lab-callout" aria-labelledby="app-lab-title">
+				<div class="loopback-mark" aria-hidden="true">
+					<span>WS</span>
+					<svg viewBox="0 0 190 54">
+						<path d="M0 35h35V18h31v17h27V8h31v27h66" />
+					</svg>
+				</div>
+				<div class="app-lab-copy">
+					<p class="section-label">文章 · App Lab</p>
+					<h2 id="app-lab-title">教程先通过实机验证，再写成答案。</h2>
+					<p>
+						用一个个独立教程说明 VENTUNO Q 小 App 的最终实现、关键代码和可复现验证方式。
+					</p>
+					{
+						currentLabApp && (
+							<div class="current-app">
+								<AppStatusBadge status={currentLabApp.data.status ?? 'planned'} compact />
+								<code>{currentLabApp.data.appId ?? currentLabApp.id}</code>
+							</div>
+						)
+					}
+				</div>
+				<a class="lab-link" href="/blog/sections/app-lab/">
+					查看 App Lab 板块
+					<span aria-hidden="true">↗</span>
+				</a>
+			</section>
+
 			<section class="recent-section">
 				<div class="section-heading">
 					<div>
 						<p class="section-label">最近更新</p>
-						<h2>刚整理好的手记</h2>
+						<h2>刚整理好的教程</h2>
 					</div>
 					<a href="/blog">查看全部文章 <span aria-hidden="true">→</span></a>
 				</div>
@@ -80,37 +124,37 @@ const secondaryPosts = recentPosts.slice(1);
 						<div class="notes-layout">
 							<a class="featured-note" href={`/blog/${featuredPost.id}/`}>
 								<div class="note-meta">
-									<span>{featuredPost.data.category}</span>
+									<span>{getSectionTitle(featuredPost.data.section)}</span>
 									<FormattedDate date={featuredPost.data.pubDate} />
 								</div>
 								<div class="featured-copy">
-									<strong>最新手记</strong>
+									<strong>最新文章</strong>
 									<h3>{featuredPost.data.title}</h3>
 									<p>{featuredPost.data.description}</p>
 								</div>
-								<span class="open-note">打开这篇手记 <b aria-hidden="true">↗</b></span>
+								<span class="open-note">打开这篇文章 <b aria-hidden="true">↗</b></span>
 							</a>
 
 							<div class="notes-list">
 								{secondaryPosts.map((post) => (
 									<a class="note-row" href={`/blog/${post.id}/`}>
 										<div>
-											<span>{post.data.category}</span>
+											<span>{getSectionTitle(post.data.section)}</span>
 											<h3>{post.data.title}</h3>
 										</div>
 										<FormattedDate date={post.data.pubDate} />
 									</a>
 								))}
 								<a class="archive-link" href="/blog">
-									<span>按分类浏览所有记录</span>
+									<span>按板块浏览所有文章</span>
 									<b aria-hidden="true">→</b>
 								</a>
 							</div>
 						</div>
 					) : (
 						<div class="empty-note">
-							<strong>研究日志已经准备好了</strong>
-							<p>第一篇实践记录发布后，会出现在这里。</p>
+							<strong>教程书架已经准备好了</strong>
+							<p>第一篇教程发布后，会出现在这里。</p>
 						</div>
 					)
 				}
@@ -349,6 +393,98 @@ const secondaryPosts = recentPosts.slice(1);
 
 	.recent-section {
 		margin-bottom: 7rem;
+	}
+
+	.app-lab-callout {
+		display: grid;
+		grid-template-columns: 180px minmax(0, 1fr) auto;
+		align-items: center;
+		gap: clamp(1.5rem, 4vw, 2.75rem);
+		margin-bottom: 7rem;
+		padding: 1.5rem;
+		background: white;
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-soft);
+	}
+
+	.loopback-mark {
+		position: relative;
+		display: grid;
+		min-height: 118px;
+		place-items: center;
+		overflow: hidden;
+		color: #edf8f5;
+		background: #24324a;
+		border-radius: 12px;
+	}
+
+	.loopback-mark > span {
+		position: absolute;
+		top: 0.55rem;
+		left: 0.7rem;
+		font-family: var(--font-mono);
+		font-size: 0.58rem;
+		font-weight: 700;
+		letter-spacing: 0.12em;
+	}
+
+	.loopback-mark svg {
+		width: 115%;
+		fill: none;
+		stroke: var(--accent);
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		stroke-width: 4;
+	}
+
+	.app-lab-copy .section-label {
+		margin-bottom: 0.35rem;
+	}
+
+	.app-lab-copy h2 {
+		margin-bottom: 0.45rem;
+		font-size: clamp(1.55rem, 3.5vw, 2.15rem);
+	}
+
+	.app-lab-copy > p:not(.section-label) {
+		max-width: 620px;
+		margin: 0;
+		color: rgb(var(--gray));
+		font-size: 0.8rem;
+	}
+
+	.current-app {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.55rem;
+		margin-top: 0.9rem;
+	}
+
+	.current-app code {
+		font-size: 0.62rem;
+	}
+
+	.lab-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.65rem 0.9rem;
+		color: rgb(var(--black));
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-decoration: none;
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 9px;
+		white-space: nowrap;
+		transition: color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+	}
+
+	.lab-link:hover {
+		color: var(--accent-dark);
+		border-color: rgba(102, 191, 174, 0.65);
+		transform: translateY(-1px);
 	}
 
 	.section-heading {
@@ -630,6 +766,15 @@ const secondaryPosts = recentPosts.slice(1);
 		.focus-section {
 			grid-template-columns: 1fr;
 		}
+
+		.app-lab-callout {
+			grid-template-columns: 150px 1fr;
+		}
+
+		.lab-link {
+			grid-column: 2;
+			justify-self: start;
+		}
 	}
 
 	@media (max-width: 620px) {
@@ -676,6 +821,19 @@ const secondaryPosts = recentPosts.slice(1);
 			align-items: flex-start;
 			flex-direction: column;
 			gap: 0.7rem;
+		}
+
+		.app-lab-callout {
+			grid-template-columns: 1fr;
+			padding: 1.15rem;
+		}
+
+		.loopback-mark {
+			min-height: 105px;
+		}
+
+		.lab-link {
+			grid-column: auto;
 		}
 
 		.featured-note {

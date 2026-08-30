@@ -1,7 +1,7 @@
 ---
 title: "咸鱼哥知识小库上线"
 description: "个人技术博客的第一篇记录。"
-category: "博客公告"
+section: "site-notices"
 pubDate: "2026-08-23"
 ---
 
