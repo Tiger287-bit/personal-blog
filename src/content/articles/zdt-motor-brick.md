@@ -23,6 +23,8 @@ capabilities:
   - "多电机同步启动"
   - "CAN V1 稳定接口"
   - "严格数值边界"
+  - "严格布尔边界"
+  - "并发安全的总线生命周期"
 sourceDir: "zdt-motor-brick"
 ---
 
@@ -105,7 +107,8 @@ request(
 | `tuple/list/set/frozenset[int]` | 接受集合中任意地址；第一个有效匹配应答完成请求 |
 
 这个参数主要用于 `set_motor_id()`：地址写入后，应答可能从旧地址或新地址返回。普通
-电机命令保持 `None` 即可。
+电机命令保持 `None` 即可。空集合表示没有任何地址可以返回有效应答，因此会在打开
+Backend 和发送 CAN 帧之前抛出 `ZDTConfigurationError`。
 
 ## 使用前需要确认
 
@@ -172,14 +175,14 @@ app/
 └── tests/
     ├── test_architecture.py         # V1架构边界永久测试
     ├── test_bus.py                  # 应答、事件、分包和同步启动测试
-    └── test_v1_contract.py          # 公开接口、参数和raw语义测试
+    └── test_v1_contract.py          # 公开接口、参数、并发和raw语义测试
 ```
 
 `tests/` 和 `scripts/` 是验证工具，不影响 Brick 的正常使用。`test_architecture.py` 防止
 命令层依赖 CAN、Raw API 暴露 CAN 帧或 `python-can` 扩散到其他模块；`test_bus.py`
 检查普通应答、异步 `0x9F`、多电机应答分发、错误恢复和同步启动；
-`test_v1_contract.py` 固定 V1 公开请求参数、请求与轮询超时规则、有限数值边界、公开导出、
-接口名处理和逻辑应答语义。
+`test_v1_contract.py` 固定 V1 公开请求参数、请求与轮询超时规则、有限数值边界、严格布尔
+参数、并发首次打开、公开导出、接口名处理和逻辑应答语义。
 
 左侧目录包含完整 App 文件。Python、C++、YAML 和 Markdown 等文本文件可以直接阅读；
 `.whl` 是二进制安装包，点击后会显示“无法在网页中阅读”，但可以下载原文件。GitHub
@@ -437,6 +440,21 @@ can_bus = ZDTCanBus(
 `move_relative(float("nan"))`、`move_absolute(float("inf"))` 等调用会在编码和发送 CAN
 报文前被拒绝。
 
+### 布尔参数必须写成 True 或 False
+
+`enabled`、`synchronized`、`store` 和 `receive_own_messages` 只接受 Python 的
+`True` 或 `False`。不要用字符串、数字或空值代替布尔值。
+
+```python
+motor.enable(synchronized=False)       # 正确
+motor.set_motor_id(2, store=True)       # 正确：写入Flash
+motor.set_motor_id(2, store=False)      # 正确：不写入Flash
+motor.set_motor_id(2, store="False")    # 错误：字符串不是布尔值
+```
+
+错误值会在命令编码和 CAN 发送之前抛出 `ZDTConfigurationError`。这一规则对 `store`
+尤其重要，因为它决定参数是否永久写入电机 Flash。
+
 ## 常用方法
 
 | 想做的事 | 方法 | 说明 |
@@ -578,6 +596,11 @@ SocketCanEndpoint → Linux can0
 默认超时、打开、关闭、请求和诊断信息。`ZDTMotor` 会明确检查传入对象是否实现
 `ZDTMotorBus`，不再同时维护一套手工 `hasattr()` 契约。
 
+同一条物理 CAN 总线只能创建一个共享 `ZDTCanBus`。它使用三个职责分离的锁：数据锁
+保护请求和分包状态，发送锁保证一条命令的多帧连续发送，生命周期锁串行执行 `open()`
+与 `close()`。即使多个电机对象从不同线程同时首次请求，Backend 也只会打开一次，并且
+只会启动一个接收线程。
+
 V1 不实现 UART、TTL、RS485、Modbus RTU、D0/D1、Bridge UART、Bridge CAN 或
 `can1` 自动发现，也不为它们创建空类和 Factory。以后出现真实需求时，新增对应的
 Bus、Protocol、Backend 和 Endpoint；`ZDTMotor` 与命令层原则上保持不变。
@@ -643,14 +666,14 @@ python3 -B -m unittest discover -s tests -v
 全部通过时结尾应显示：
 
 ```text
-Ran 76 tests
+Ran 83 tests
 
 OK
 ```
 
-这 76 项测试同时覆盖命令编码、应答解析、分包重组、多电机分发、异步完成事件、错误恢复、
+这 83 项测试同时覆盖命令编码、应答解析、分包重组、多电机分发、异步完成事件、错误恢复、
 公开 Bus 契约、请求与轮询超时边界、`NaN/Inf` 运动参数拦截、公共 API、SocketCAN 接口名
-规范化和 `ZDTResponse.raw` 语义。
+规范化、严格布尔参数、空应答地址集合、并发首次打开和 `ZDTResponse.raw` 语义。
 
 ## 当前范围
 
@@ -659,7 +682,8 @@ OK
 
 手册中只明确标注给其他型号的功能不会向 X57S 发送。TTL、RS485、CANopen 等其他通信方式也不在这个版本中。
 
-配套源码保存了 76 项永久回归测试，覆盖命令、协议、Backend、正式 Bus 契约、
+配套源码保存了 83 项永久回归测试，覆盖命令、协议、Backend、正式 Bus 契约、
 `0xF5/0x9A/0xFD` 完成事件、有界事件队列、溢出计数、多电机分发、错误恢复、同步启动和
-严格数值边界及 `SocketCanEndpoint` 规范化。VENTUNO Q 上的地址 1、2、3、4 四台 X57S 已完成共享总线
+严格数值与布尔边界、空应答地址集合、并发首次打开及 `SocketCanEndpoint` 规范化。
+VENTUNO Q 上的地址 1、2、3、4 四台 X57S 已完成共享总线
 只读测试和逐台 `10 RPM / +30°` 运动测试，测试结束后全部停止并失能，CAN 错误计数保持为 0。

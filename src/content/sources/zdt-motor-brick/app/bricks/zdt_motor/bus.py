@@ -147,6 +147,7 @@ class ZDTCanBus(ZDTMotorBus):
         self._dropped_event_count = 0
         self._lock = threading.RLock()
         self._send_lock = threading.Lock()
+        self._lifecycle_lock = threading.RLock()
         self._stop_event = threading.Event()
         self._receiver_thread = None
         self._receiver_error = None
@@ -236,19 +237,21 @@ class ZDTCanBus(ZDTMotorBus):
         @param               : 无参数
         @return              : 当前ZDTCanBus
         """
-        if self.is_open:
+        with self._lifecycle_lock:
+            if self.is_open:
+                return self
+            self.backend.open()
+            self._stop_event.clear()
+            self._receiver_error = None
+            self._last_protocol_error = None
+            receiver = threading.Thread(
+                target=self._receive_loop,
+                name="zdt-can-receiver",
+                daemon=True,
+            )
+            self._receiver_thread = receiver
+            receiver.start()
             return self
-        self.backend.open()
-        self._stop_event.clear()
-        self._receiver_error = None
-        self._last_protocol_error = None
-        self._receiver_thread = threading.Thread(
-            target=self._receive_loop,
-            name="zdt-can-receiver",
-            daemon=True,
-        )
-        self._receiver_thread.start()
-        return self
 
     def close(self):
         """
@@ -256,13 +259,14 @@ class ZDTCanBus(ZDTMotorBus):
         @param               : 无参数
         @return              : 无返回值
         """
-        self._stop_event.set()
-        receiver = self._receiver_thread
-        if receiver is not None and receiver is not threading.current_thread():
-            receiver.join(timeout=1.0)
-        self._receiver_thread = None
-        self.backend.close()
-        self._fail_all(ZDTBackendError("ZDT bus closed"))
+        with self._lifecycle_lock:
+            self._stop_event.set()
+            receiver = self._receiver_thread
+            if receiver is not None and receiver is not threading.current_thread():
+                receiver.join(timeout=1.0)
+            self._receiver_thread = None
+            self.backend.close()
+            self._fail_all(ZDTBackendError("ZDT bus closed"))
 
     def encode_frames(self, address, command):
         """
@@ -307,7 +311,9 @@ class ZDTCanBus(ZDTMotorBus):
                 validate_motor_id(item) for item in response_address
             )
             if not reply_addresses:
-                raise ValueError("response_address collection must not be empty")
+                raise ZDTConfigurationError(
+                    "response_address collection must not be empty"
+                )
         else:
             reply_addresses = (validate_motor_id(response_address),)
         effective_timeout = validate_positive_number(

@@ -3,7 +3,7 @@
 import socket
 
 from .base import CanBackend, CanFrame
-from ..config import validate_nonnegative_number
+from ..config import validate_bool, validate_nonnegative_number
 from ..errors import ZDTBackendError, ZDTConfigurationError
 
 
@@ -23,7 +23,10 @@ class SocketCANBackend(CanBackend):
         if not normalized_device:
             raise ZDTConfigurationError("device must be a non-empty string")
         self.device = normalized_device
-        self.receive_own_messages = bool(receive_own_messages)
+        self.receive_own_messages = validate_bool(
+            "receive_own_messages",
+            receive_own_messages,
+        )
         self._bus = None
 
     def open(self):

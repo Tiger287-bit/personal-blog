@@ -1,6 +1,6 @@
 """ZDT X 固件专属速度和梯形位置命令。"""
 
-from ..config import MotionMode, validate_int, validate_number
+from ..config import MotionMode, validate_bool, validate_int, validate_number
 from ..errors import ZDTConfigurationError
 from ..messages import LogicalCommand
 from .base import direction_and_magnitude, pack_u16, pack_u32, parse_motion_mode
@@ -33,13 +33,14 @@ def build_speed(rpm, *, direction=None, acceleration=1000, synchronized=False):
     resolved_direction, magnitude = direction_and_magnitude(
         "rpm", rpm, direction, 3000.0
     )
+    synchronized_value = validate_bool("synchronized", synchronized)
     speed_tenths = to_tenths("rpm", magnitude, 3000.0)
     acceleration_value = validate_int("acceleration", acceleration, 0, 65535)
     payload = (
         bytes((resolved_direction,))
         + pack_u16(acceleration_value)
         + pack_u16(speed_tenths)
-        + bytes((int(bool(synchronized)),))
+        + bytes((int(synchronized_value),))
     )
     return LogicalCommand(0xF6, payload, 3, "X speed mode")
 
@@ -68,6 +69,7 @@ def build_position(
     resolved_direction, magnitude = direction_and_magnitude(
         "degrees", degrees, direction, 429496729.5
     )
+    synchronized_value = validate_bool("synchronized", synchronized)
     angle_tenths = to_tenths("degrees", magnitude, 429496729.5)
     speed_tenths = to_tenths("rpm", rpm, 3000.0)
     acceleration_value = validate_int("acceleration", acceleration, 0, 65535)
@@ -84,6 +86,6 @@ def build_position(
         + pack_u16(deceleration_value)
         + pack_u16(speed_tenths)
         + pack_u32(angle_tenths)
-        + bytes((motion_mode, int(bool(synchronized))))
+        + bytes((motion_mode, int(synchronized_value)))
     )
     return LogicalCommand(0xFD, payload, 3, "X trapezoidal position mode")

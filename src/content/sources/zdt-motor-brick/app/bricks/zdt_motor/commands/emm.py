@@ -1,6 +1,6 @@
 """ZDT Emm 固件专属速度和位置命令。"""
 
-from ..config import MotionMode, validate_int, validate_number
+from ..config import MotionMode, validate_bool, validate_int, validate_number
 from ..errors import ZDTConfigurationError
 from ..messages import LogicalCommand
 from .base import (
@@ -24,12 +24,13 @@ def build_speed(rpm, *, direction=None, acceleration=10, synchronized=False):
     resolved_direction, magnitude = direction_and_magnitude(
         "rpm", rpm, direction, 3000
     )
+    synchronized_value = validate_bool("synchronized", synchronized)
     speed = require_whole_number("rpm", magnitude)
     acceleration_level = validate_int("acceleration", acceleration, 0, 255)
     payload = (
         bytes((resolved_direction,))
         + pack_u16(speed)
-        + bytes((acceleration_level, int(bool(synchronized))))
+        + bytes((acceleration_level, int(synchronized_value)))
     )
     return LogicalCommand(0xF6, payload, 3, "Emm speed mode")
 
@@ -80,6 +81,7 @@ def build_position(
     resolved_direction, magnitude = direction_and_magnitude(
         "degrees", degrees, direction, 1e12
     )
+    synchronized_value = validate_bool("synchronized", synchronized)
     normalized_rpm = require_whole_number(
         "rpm", validate_number("rpm", rpm, 0, 3000)
     )
@@ -95,6 +97,6 @@ def build_position(
         + pack_u16(normalized_rpm)
         + bytes((acceleration_level,))
         + pack_u32(pulses)
-        + bytes((motion_mode, int(bool(synchronized))))
+        + bytes((motion_mode, int(synchronized_value)))
     )
     return LogicalCommand(0xFD, payload, 3, "Emm position mode")

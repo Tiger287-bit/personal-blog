@@ -166,6 +166,18 @@ def validate_int(name, value, minimum, maximum):
     return value
 
 
+def validate_bool(name, value):
+    """
+    @description         : 严格校验布尔参数
+    @param name          : 参数名称
+    @param value         : 待校验值
+    @return              : 合法bool
+    """
+    if not isinstance(value, bool):
+        raise ZDTConfigurationError(f"{name} must be a boolean")
+    return value
+
+
 def validate_number(name, value, minimum, maximum):
     """
     @description         : 校验工程单位数值范围

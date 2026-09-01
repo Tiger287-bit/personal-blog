@@ -140,7 +140,37 @@ request(
 | `tuple/list/set/frozenset[int]` | 允许集合中的任意地址；第一个有效匹配应答完成请求 |
 
 主要使用场景是 `set_motor_id()`：地址写入后，确认应答可能来自旧地址，也可能来自新地址。
-普通电机命令不需要填写 `response_address`。
+普通电机命令不需要填写 `response_address`。空集合没有任何合法应答地址，会在打开
+Backend 和发送 CAN 帧之前抛出 `ZDTConfigurationError`。
+
+### 严格布尔参数
+
+用户传入的 `enabled`、`synchronized`、`store` 和 `receive_own_messages` 只接受真正的
+Python `True` 或 `False`。字符串 `"False"`、整数 `0/1`、`None`、列表和字典都不会被
+自动转换，而是统一抛出 `ZDTConfigurationError`。
+
+其中 `store` 决定配置是否写入电机 Flash，必须明确填写布尔值：
+
+```python
+motor.set_motor_id(2, store=True)   # 永久写入
+motor.set_motor_id(2, store=False)  # 临时修改
+```
+
+不要使用 `store="False"`。V1 会在命令编码和 CAN 发送之前拒绝它，避免字符串被当成真值。
+
+### Bus 生命周期并发规则
+
+一个 `ZDTCanBus` 始终只拥有一个 Backend 和一个 Receiver Thread。`open()` 与 `close()`
+使用独立的 lifecycle lock 串行化；它不复用保护 pending/assembly 的数据锁，也不复用
+保证多帧连续发送的 send lock。
+
+```text
+_lock            -> pending / assembly
+_send_lock       -> 一个LogicalCommand的多帧连续发送
+_lifecycle_lock  -> open / close
+```
+
+因此多台电机从多个线程同时第一次发起请求时，Backend 只打开一次，也只启动一个接收线程。
 
 ## Basic use: one motor on can0
 

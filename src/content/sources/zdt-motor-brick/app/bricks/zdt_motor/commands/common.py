@@ -1,6 +1,12 @@
 """Emm 和 X 固件格式一致的 ZDT 命令。"""
 
-from ..config import HomeMode, parse_direction, validate_int, validate_motor_id
+from ..config import (
+    HomeMode,
+    parse_direction,
+    validate_bool,
+    validate_int,
+    validate_motor_id,
+)
 from ..errors import ZDTConfigurationError
 from ..messages import LogicalCommand
 from .base import pack_u16
@@ -13,7 +19,9 @@ def build_enable(enabled=True, *, synchronized=False):
     @param synchronized  : True缓存到同步触发，False立即执行
     @return              : LogicalCommand
     """
-    payload = bytes((0xAB, int(bool(enabled)), int(bool(synchronized))))
+    enabled_value = validate_bool("enabled", enabled)
+    synchronized_value = validate_bool("synchronized", synchronized)
+    payload = bytes((0xAB, int(enabled_value), int(synchronized_value)))
     return LogicalCommand(0xF3, payload, 3, "enable motor")
 
 
@@ -23,9 +31,10 @@ def build_stop(*, synchronized=False):
     @param synchronized  : True缓存到同步触发，False立即执行
     @return              : LogicalCommand
     """
+    synchronized_value = validate_bool("synchronized", synchronized)
     return LogicalCommand(
         0xFE,
-        bytes((0x98, int(bool(synchronized)))),
+        bytes((0x98, int(synchronized_value))),
         3,
         "stop motor",
     )
@@ -51,9 +60,10 @@ def build_home(mode=HomeMode.NEAREST, *, synchronized=False):
         normalized_mode = mode if isinstance(mode, HomeMode) else HomeMode(mode)
     except (TypeError, ValueError) as error:
         raise ZDTConfigurationError("invalid home mode") from error
+    synchronized_value = validate_bool("synchronized", synchronized)
     return LogicalCommand(
         0x9A,
-        bytes((normalized_mode, int(bool(synchronized)))),
+        bytes((normalized_mode, int(synchronized_value))),
         3,
         "start homing",
     )
@@ -76,9 +86,10 @@ def build_set_motor_id(new_motor_id, *, store=True):
     @return              : LogicalCommand
     """
     normalized_id = validate_motor_id(new_motor_id)
+    store_value = validate_bool("store", store)
     return LogicalCommand(
         0xAE,
-        bytes((0x4B, int(bool(store)), normalized_id)),
+        bytes((0x4B, int(store_value), normalized_id)),
         3,
         "set motor id",
     )
@@ -92,10 +103,11 @@ def build_set_microstep(microstep, *, store=True):
     @return              : LogicalCommand
     """
     normalized = validate_int("microstep", microstep, 1, 256)
+    store_value = validate_bool("store", store)
     protocol_value = 0 if normalized == 256 else normalized
     return LogicalCommand(
         0x84,
-        bytes((0x8A, int(bool(store)), protocol_value)),
+        bytes((0x8A, int(store_value), protocol_value)),
         3,
         "set microstep",
     )
@@ -109,7 +121,8 @@ def build_set_current_limit(current_ma, *, store=True):
     @return              : LogicalCommand
     """
     normalized = validate_int("current_ma", current_ma, 0, 5000)
-    payload = bytes((0x66, int(bool(store)))) + pack_u16(normalized)
+    store_value = validate_bool("store", store)
+    payload = bytes((0x66, int(store_value))) + pack_u16(normalized)
     return LogicalCommand(0x45, payload, 3, "set closed-loop current limit")
 
 
@@ -121,7 +134,8 @@ def build_set_direction(direction, *, store=True):
     @return              : LogicalCommand
     """
     normalized = parse_direction(direction)
-    payload = bytes((0x60, int(bool(store)), normalized))
+    store_value = validate_bool("store", store)
+    payload = bytes((0x60, int(store_value), normalized))
     return LogicalCommand(0xD4, payload, 3, "set positive direction")
 
 
