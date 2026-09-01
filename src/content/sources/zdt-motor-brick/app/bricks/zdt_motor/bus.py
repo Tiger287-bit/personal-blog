@@ -6,11 +6,14 @@ import threading
 import time
 
 from .backends import MotorBackend, SocketCANBackend
+from .bus_base import BusKind, ZDTMotorBus
 from .commands import common
 from .config import ChecksumType, parse_checksum_type, validate_motor_id
+from .endpoints import SocketCanEndpoint
 from .errors import (
     ZDTBackendError,
     ZDTBusBusyError,
+    ZDTConfigurationError,
     ZDTProtocolError,
     ZDTTimeoutError,
     ZDTUnsupportedFeatureError,
@@ -24,6 +27,7 @@ from .protocols import (
 
 
 ASYNC_COMPLETION_STATUS = 0x9F
+ASYNC_COMPLETION_FUNCTIONS = frozenset({0x9A, 0xFD})
 
 
 @dataclass
@@ -52,23 +56,27 @@ class BusTrace:
     frame: object
 
 
-class ZDTBus:
-    """支持一个 SocketCAN Bus 共享多个电机对象。"""
+class ZDTCanBus(ZDTMotorBus):
+    """支持一个 SocketCAN 总线共享多个电机对象。"""
 
     def __init__(
         self,
         *,
+        name="zdt_can",
+        endpoint=None,
         interface="can",
-        device="can0",
+        device=None,
         checksum=ChecksumType.FIXED_6B,
         backend=None,
         default_timeout_s=0.5,
         trace_callback=None,
     ):
         """
-        @description         : 配置共享Bus但不自动修改或拉起can0
-        @param interface     : V1支持can或socketcan
-        @param device        : SocketCAN接口名
+        @description         : 配置共享CAN总线但不自动修改或拉起系统接口
+        @param name          : 便于日志和诊断识别的总线名称
+        @param endpoint      : SocketCanEndpoint接口配置对象
+        @param interface     : 兼容旧代码，仅支持can或socketcan
+        @param device        : 兼容旧代码的SocketCAN接口名，推荐改用endpoint
         @param checksum      : ZDT校验方式
         @param backend       : 可选MotorBackend，单元测试可传FakeBackend
         @param default_timeout_s: 默认应答超时秒数
@@ -77,17 +85,39 @@ class ZDTBus:
         """
         if default_timeout_s <= 0:
             raise ValueError("default_timeout_s must be greater than zero")
+        if not isinstance(name, str) or not name.strip():
+            raise ZDTConfigurationError("CAN bus name must not be empty")
         normalized_interface = str(interface).lower()
+        if normalized_interface not in ("can", "socketcan"):
+            raise ZDTUnsupportedFeatureError(
+                f"backend '{interface}' is reserved for a future bus class"
+            )
+        if endpoint is not None and device is not None:
+            raise ZDTConfigurationError(
+                "use endpoint or legacy device, not both"
+            )
+        if endpoint is not None and not isinstance(endpoint, SocketCanEndpoint):
+            raise TypeError("endpoint must be a SocketCanEndpoint")
+        if endpoint is None:
+            resolved_device = device
+            if resolved_device is None and isinstance(backend, SocketCANBackend):
+                resolved_device = backend.device
+            endpoint = SocketCanEndpoint(interface=resolved_device or "can0")
         if backend is None:
-            if normalized_interface not in ("can", "socketcan"):
-                raise ZDTUnsupportedFeatureError(
-                    f"backend '{interface}' is reserved for a future version"
-                )
-            backend = SocketCANBackend(device=device)
+            backend = SocketCANBackend(device=endpoint.interface)
         if not isinstance(backend, MotorBackend):
             raise TypeError("backend must implement MotorBackend")
+        if (
+            isinstance(backend, SocketCANBackend)
+            and backend.device != endpoint.interface
+        ):
+            raise ZDTConfigurationError(
+                "SocketCAN backend device does not match endpoint interface"
+            )
+        self.name = name.strip()
+        self._endpoint = endpoint
         self.backend = backend
-        self.device = device
+        self.device = endpoint.interface
         self.checksum = parse_checksum_type(checksum)
         self.protocol = ZDTProtocol(self.checksum)
         self.default_timeout_s = float(default_timeout_s)
@@ -100,6 +130,40 @@ class ZDTBus:
         self._stop_event = threading.Event()
         self._receiver_thread = None
         self._receiver_error = None
+        self._last_protocol_error = None
+
+    @property
+    def kind(self):
+        """
+        @description         : 标明当前对象是一条CAN总线
+        @param               : 无参数
+        @return              : BusKind.CAN
+        """
+        return BusKind.CAN
+
+    @property
+    def endpoint(self):
+        """
+        @description         : 获取当前CAN总线使用的SocketCAN端点
+        @param               : 无参数
+        @return              : SocketCanEndpoint对象
+        """
+        return self._endpoint
+
+    def describe(self):
+        """
+        @description         : 返回当前CAN总线的可读配置和运行状态
+        @param               : 无参数
+        @return              : 只包含基础数据类型的字典
+        """
+        return {
+            "name": self.name,
+            "kind": self.kind.value,
+            "endpoint": self.endpoint.describe(),
+            "checksum": self.checksum.value,
+            "backend": type(self.backend).__name__,
+            "state": "open" if self.is_open else "closed",
+        }
 
     @property
     def is_open(self):
@@ -110,17 +174,27 @@ class ZDTBus:
         """
         return self._receiver_thread is not None and self._receiver_thread.is_alive()
 
+    @property
+    def last_protocol_error(self):
+        """
+        @description         : 获取最近一条非致命协议异常用于诊断
+        @param               : 无参数
+        @return              : 最近异常对象或None
+        """
+        return self._last_protocol_error
+
     def open(self):
         """
         @description         : 打开Backend并启动响应分发线程
         @param               : 无参数
-        @return              : 当前ZDTBus
+        @return              : 当前ZDTCanBus
         """
         if self.is_open:
             return self
         self.backend.open()
         self._stop_event.clear()
         self._receiver_error = None
+        self._last_protocol_error = None
         self._receiver_thread = threading.Thread(
             target=self._receive_loop,
             name="zdt-can-receiver",
@@ -281,14 +355,15 @@ class ZDTBus:
             if frame is None:
                 try:
                     self._expire_assemblies()
-                except Exception:
-                    pass
+                except Exception as error:
+                    self._last_protocol_error = error
                 continue
             try:
                 self._trace("rx", frame)
                 self._consume_frame(frame)
-            except Exception:
+            except Exception as error:
                 # 单条坏帧、重复返回或观察回调异常不能终止整个CAN接收线程。
+                self._last_protocol_error = error
                 continue
 
     def _consume_frame(self, frame):
@@ -320,6 +395,19 @@ class ZDTBus:
             else:
                 assembly = self._assemblies.get(key)
                 if assembly is None:
+                    candidates = [
+                        candidate_key
+                        for candidate_key, candidate in self._assemblies.items()
+                        if candidate_key[0] == address
+                        and candidate.next_packet == packet
+                    ]
+                    if len(candidates) == 1:
+                        self._complete_with_error(
+                            candidates[0],
+                            ZDTProtocolError(
+                                "ZDT continuation function code mismatch"
+                            ),
+                        )
                     return
                 if packet != assembly.next_packet:
                     self._complete_with_error(
@@ -333,6 +421,19 @@ class ZDTBus:
             logical_length = len(assembly.frames[0].data) + sum(
                 len(item.data) - 1 for item in assembly.frames[1:]
             )
+            if (
+                assembly.expected_length is not None
+                and logical_length < assembly.expected_length
+                and len(frame.data) < 8
+            ):
+                self._complete_with_error(
+                    key,
+                    ZDTProtocolError(
+                        f"ZDT response length {logical_length} != "
+                        f"{assembly.expected_length}"
+                    ),
+                )
+                return
             complete = (
                 assembly.expected_length is not None
                 and logical_length >= assembly.expected_length
@@ -369,10 +470,14 @@ class ZDTBus:
                 timestamp=assembly.frames[-1].timestamp,
             )
         except Exception as error:
+            self._last_protocol_error = error
             if pending is not None:
                 self._put_pending_result(pending, error)
             return
-        if response.data == bytes((ASYNC_COMPLETION_STATUS,)):
+        if (
+            response.function_code in ASYNC_COMPLETION_FUNCTIONS
+            and response.data == bytes((ASYNC_COMPLETION_STATUS,))
+        ):
             self._put_event(response)
             return
         if pending is None:
@@ -388,6 +493,7 @@ class ZDTBus:
         @return              : 无返回值
         """
         self._assemblies.pop(key, None)
+        self._last_protocol_error = error
         pending = self._pending.get(key)
         if pending is not None:
             self._put_pending_result(pending, error)
@@ -480,3 +586,7 @@ class ZDTBus:
         """
         self.close()
         return False
+
+
+# 兼容旧版导入；新代码应使用含义更明确的 ZDTCanBus。
+ZDTBus = ZDTCanBus

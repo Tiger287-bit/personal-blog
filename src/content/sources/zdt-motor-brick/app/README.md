@@ -2,12 +2,13 @@
 
 这个 Arduino App Lab App 演示如何复用 `zdt_motor` Brick，通过 VENTUNO Q 的 Linux `can0` 控制 ZDT 第二代闭环步进电机。
 
-## 先认识两个对象
+## 先认识三个对象
 
-- `ZDTBus` 表示一条 CAN 总线。一个 App 通常只创建一个。
+- `SocketCanEndpoint` 表示 Linux 中具体使用的 CAN 接口，例如 `can0`。
+- `ZDTCanBus` 表示一条 ZDT CAN 总线。一个物理 CAN 总线只创建一个。
 - `ZDTMotor` 表示一台电机。每台电机分别创建一个。
 
-例如，地址为 `1` 的电机对应一个 `ZDTMotor(motor_id=1)` 对象。四台电机地址为 `1、2、3、4` 时，创建四个对象并共用同一个 `ZDTBus`。
+例如，地址为 `1` 的电机对应一个 `ZDTMotor(motor_id=1)` 对象。四台电机地址为 `1、2、3、4` 时，创建四个对象并共用同一个 `ZDTCanBus`。
 
 ## 项目目录
 
@@ -21,7 +22,9 @@ zdt-motor-demo/
 ├── bricks/zdt_motor/
 │   ├── README.md                  # Brick 使用说明
 │   ├── motor.py                   # 单电机 API
-│   ├── bus.py                     # CAN 总线管理
+│   ├── bus.py                     # ZDT CAN 总线管理
+│   ├── bus_base.py                # 电机总线公共接口
+│   ├── endpoints.py               # SocketCAN接口配置
 │   ├── commands/                  # 命令参数编码
 │   ├── protocols/                 # CAN 报文生成和解析
 │   ├── backends/socketcan.py      # 打开 can0
@@ -35,7 +38,8 @@ zdt-motor-demo/
 1. `python/main.py`
 2. `bricks/zdt_motor/README.md`
 3. `bricks/zdt_motor/motor.py`
-4. `bricks/zdt_motor/bus.py`
+4. `bricks/zdt_motor/endpoints.py`
+5. `bricks/zdt_motor/bus.py`
 
 ## 启动 App
 
@@ -83,12 +87,14 @@ ip -details -statistics link show can0
 ## 最小 Python 用法
 
 ```python
-from zdt_motor import ZDTBus, ZDTMotor
+from zdt_motor import SocketCanEndpoint, ZDTCanBus, ZDTMotor
 
 
-with ZDTBus(device="can0") as bus:
+can_endpoint = SocketCanEndpoint(interface="can0", expected_bitrate=500_000)
+
+with ZDTCanBus(name="motor_can", endpoint=can_endpoint) as can_bus:
     motor = ZDTMotor(
-        bus=bus,
+        bus=can_bus,
         model="X57S",
         motor_id=1,
         firmware="emm",
@@ -104,13 +110,15 @@ with ZDTBus(device="can0") as bus:
 ## 四台电机的写法
 
 ```python
-from zdt_motor import ZDTBus, ZDTMotor
+from zdt_motor import SocketCanEndpoint, ZDTCanBus, ZDTMotor
 
 
-with ZDTBus(device="can0") as bus:
+can_endpoint = SocketCanEndpoint(interface="can0", expected_bitrate=500_000)
+
+with ZDTCanBus(name="motor_can", endpoint=can_endpoint) as can_bus:
     motors = {
         motor_id: ZDTMotor(
-            bus=bus,
+            bus=can_bus,
             model="X57S",
             motor_id=motor_id,
             firmware="emm",
@@ -122,7 +130,15 @@ with ZDTBus(device="can0") as bus:
         print(motor_id, motor.get_speed())
 ```
 
-不要为每台电机分别打开一次 `can0`。所有电机对象应共用一个 `ZDTBus`。
+不要为每台电机分别打开一次 `can0`。所有电机对象应共用一个 `ZDTCanBus`。
+
+`expected_bitrate` 只记录预期配置，不会自动修改 Linux 接口。Brick 不会执行
+`sudo ip link`。旧代码中的 `ZDTBus(device="can0")` 仍可运行，但新代码推荐使用
+含义更明确的 `ZDTCanBus` 和 `SocketCanEndpoint`。
+
+当前只实现 CAN。未来串口应使用单独的 `ZDTSerialBus` 和串口端点，不会把串口判断
+加入 `ZDTCanBus`。VENTUNO Q 的 D0/D1 是 MCU 引脚，未来需要通过 MCU/RouterBridge
+端点访问；它们不是 Linux 串口设备名。
 
 ## VENTUNO Q 上的运行边界
 

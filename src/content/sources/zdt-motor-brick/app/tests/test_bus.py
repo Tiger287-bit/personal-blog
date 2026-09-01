@@ -5,7 +5,17 @@ import time
 import unittest
 
 from fake_backend import FakeBackend
-from zdt_motor import ZDTBus, ZDTBusBusyError, ZDTMotor, ZDTProtocolError
+from zdt_motor import (
+    BusKind,
+    SocketCanEndpoint,
+    ZDTBus,
+    ZDTBusBusyError,
+    ZDTCanBus,
+    ZDTConfigurationError,
+    ZDTMotor,
+    ZDTMotorBus,
+    ZDTProtocolError,
+)
 from zdt_motor.backends import CanFrame
 from zdt_motor.protocols import LogicalCommand, calculate_checksum, split_can_frames
 
@@ -36,6 +46,89 @@ def wait_until(predicate, timeout_s=0.2):
             return True
         time.sleep(0.001)
     return bool(predicate())
+
+
+class ExplicitCanBusTests(unittest.TestCase):
+    """验证总线种类和系统接口都能被明确读取。"""
+
+    def test_default_can0_endpoint_is_explicit(self):
+        """
+        @description         : 校验默认对象明确表示CAN和can0接口
+        @param               : 无参数
+        @return              : 无返回值
+        """
+        bus = ZDTCanBus(backend=FakeBackend())
+        self.assertIsInstance(bus, ZDTMotorBus)
+        self.assertEqual(bus.kind, BusKind.CAN)
+        self.assertEqual(bus.endpoint.interface, "can0")
+        self.assertEqual(bus.endpoint.expected_bitrate, 500_000)
+        self.assertEqual(bus.device, "can0")
+
+    def test_named_can_bus_describes_custom_endpoint(self):
+        """
+        @description         : 校验自定义CAN接口和物理端口信息可用于诊断
+        @param               : 无参数
+        @return              : 无返回值
+        """
+        endpoint = SocketCanEndpoint(
+            interface="can1",
+            expected_bitrate=250_000,
+            physical_port="USB-CAN adapter A",
+        )
+        bus = ZDTCanBus(
+            name="motor_can_a",
+            endpoint=endpoint,
+            backend=FakeBackend(),
+        )
+        self.assertEqual(
+            bus.describe(),
+            {
+                "name": "motor_can_a",
+                "kind": "can",
+                "endpoint": {
+                    "transport": "socketcan",
+                    "owner": "linux",
+                    "interface": "can1",
+                    "expected_bitrate": 250_000,
+                    "physical_port": "USB-CAN adapter A",
+                },
+                "checksum": "fixed_6b",
+                "backend": "FakeBackend",
+                "state": "closed",
+            },
+        )
+
+    def test_legacy_bus_name_and_device_remain_compatible(self):
+        """
+        @description         : 校验旧ZDTBus名称和device参数仍可继续使用
+        @param               : 无参数
+        @return              : 无返回值
+        """
+        bus = ZDTBus(device="can2", backend=FakeBackend())
+        self.assertIsInstance(bus, ZDTCanBus)
+        self.assertEqual(bus.endpoint.interface, "can2")
+
+    def test_endpoint_and_legacy_device_cannot_be_mixed(self):
+        """
+        @description         : 校验新旧接口参数同时填写时给出明确配置错误
+        @param               : 无参数
+        @return              : 无返回值
+        """
+        with self.assertRaises(ZDTConfigurationError):
+            ZDTCanBus(
+                endpoint=SocketCanEndpoint(interface="can0"),
+                device="can1",
+                backend=FakeBackend(),
+            )
+
+    def test_endpoint_rejects_invalid_bitrate_metadata(self):
+        """
+        @description         : 校验期望波特率必须为正整数
+        @param               : 无参数
+        @return              : 无返回值
+        """
+        with self.assertRaises(ZDTConfigurationError):
+            SocketCanEndpoint(expected_bitrate=0)
 
 
 class BusLifecycleTests(unittest.TestCase):
@@ -161,6 +254,85 @@ class BusLifecycleTests(unittest.TestCase):
                     backend.queue_frame(frame)
             events = [bus.next_event(timeout_s=0.2) for _ in range(20)]
             self.assertTrue(all(event is not None for event in events))
+            self.assertTrue(bus.is_open)
+            self.assertIsNone(bus._receiver_error)
+        finally:
+            bus.close()
+
+    def test_single_byte_read_value_9f_is_not_completion_event(self):
+        """
+        @description         : 校验3A读取值9F仍完成普通请求且不进入事件队列
+        @param               : 无参数
+        @return              : 无返回值
+        """
+        def on_send(frame, backend):
+            if frame.data and frame.data[0] == 0x3A:
+                for reply in response_frames(1, 0x3A, b"\x9F"):
+                    backend.queue_frame(reply)
+
+        backend = FakeBackend(on_send=on_send)
+        bus = ZDTBus(backend=backend, default_timeout_s=0.1)
+        try:
+            response = bus.request(
+                1,
+                LogicalCommand(0x3A, b"", 3, "read motor status"),
+            )
+            self.assertEqual(response.function_code, 0x3A)
+            self.assertEqual(response.data, b"\x9F")
+            self.assertIsNone(bus.next_event())
+            self.assertTrue(bus.is_open)
+            self.assertIsNone(bus._receiver_error)
+        finally:
+            bus.close()
+
+    def test_duplicate_immediate_ack_does_not_kill_receiver(self):
+        """
+        @description         : 校验重复02应答队列已满时接收线程仍可继续请求
+        @param               : 无参数
+        @return              : 无返回值
+        """
+        send_count = 0
+        queue_full_observed = threading.Event()
+
+        def on_send(frame, backend):
+            nonlocal send_count
+            if not frame.data or frame.data[0] != 0xF3:
+                return
+            send_count += 1
+            reply_count = 2 if send_count == 1 else 1
+            for _ in range(reply_count):
+                for reply in response_frames(1, 0xF3, b"\x02"):
+                    backend.queue_frame(reply)
+            if send_count == 1:
+                self.assertTrue(queue_full_observed.wait(0.2))
+
+        backend = FakeBackend(on_send=on_send)
+        bus = ZDTBus(backend=backend, default_timeout_s=0.2)
+        command = LogicalCommand(0xF3, b"\xAB\x01\x00", 3, "enable motor")
+        original_put = bus._put_pending_result
+
+        def tracking_put(pending, result):
+            """
+            @description         : 记录重复应答确实触发请求结果队列已满分支
+            @param pending       : 当前等待请求
+            @param result        : 待投递响应
+            @return              : 原投递函数结果
+            """
+            delivered = original_put(pending, result)
+            if not delivered:
+                queue_full_observed.set()
+            return delivered
+
+        bus._put_pending_result = tracking_put
+        try:
+            first = bus.request(1, command)
+            self.assertEqual(first.data, b"\x02")
+            self.assertTrue(queue_full_observed.is_set())
+            self.assertTrue(bus.is_open)
+            self.assertIsNone(bus._receiver_error)
+
+            second = bus.request(1, command)
+            self.assertEqual(second.data, b"\x02")
             self.assertTrue(bus.is_open)
             self.assertIsNone(bus._receiver_error)
         finally:
@@ -310,6 +482,7 @@ class BusLifecycleTests(unittest.TestCase):
             self.assertFalse(worker.is_alive())
             self.assertIsInstance(result[0], ZDTProtocolError)
             self.assertTrue(bus.is_open)
+            self.assertIsInstance(bus.last_protocol_error, ZDTProtocolError)
 
             result.clear()
             worker = threading.Thread(target=run_request)
@@ -320,6 +493,39 @@ class BusLifecycleTests(unittest.TestCase):
             worker.join(0.2)
             self.assertFalse(worker.is_alive())
             self.assertEqual(result[0].data, bytes(range(8)))
+        finally:
+            bus.close()
+
+    def test_short_response_fails_request_without_stopping_receiver(self):
+        """
+        @description         : 校验可识别的短应答立即返回协议错误且线程继续工作
+        @param               : 无参数
+        @return              : 无返回值
+        """
+        send_count = 0
+
+        def on_send(frame, backend):
+            nonlocal send_count
+            if not frame.data or frame.data[0] != 0x35:
+                return
+            send_count += 1
+            data = b"\x00" if send_count == 1 else b"\x00\x00\x0A"
+            for reply in response_frames(1, 0x35, data):
+                backend.queue_frame(reply)
+
+        backend = FakeBackend(on_send=on_send)
+        bus = ZDTBus(backend=backend, default_timeout_s=0.2)
+        command = LogicalCommand(0x35, b"", 5, "read speed")
+        try:
+            with self.assertRaises(ZDTProtocolError):
+                bus.request(1, command)
+            self.assertIsInstance(bus.last_protocol_error, ZDTProtocolError)
+            self.assertTrue(bus.is_open)
+
+            response = bus.request(1, command)
+            self.assertEqual(response.data, b"\x00\x00\x0A")
+            self.assertTrue(bus.is_open)
+            self.assertIsNone(bus._receiver_error)
         finally:
             bus.close()
 

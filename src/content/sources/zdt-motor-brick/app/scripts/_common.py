@@ -9,7 +9,7 @@ BRICKS_ROOT = APP_ROOT / "bricks"
 if str(BRICKS_ROOT) not in sys.path:
     sys.path.insert(0, str(BRICKS_ROOT))
 
-from zdt_motor import ZDTBus, ZDTMotor  # noqa: E402
+from zdt_motor import SocketCanEndpoint, ZDTCanBus, ZDTMotor  # noqa: E402
 from zdt_motor.protocols import parse_arbitration_id  # noqa: E402
 
 
@@ -36,12 +36,16 @@ def create_bus_and_motor(args, *, trace=False):
     @description         : 根据命令行参数创建共享Bus和单电机对象
     @param args          : argparse解析结果
     @param trace         : 是否打印原始CAN帧
-    @return              : ZDTBus和ZDTMotor二元组
+    @return              : ZDTCanBus和ZDTMotor二元组
     """
     callback = print_trace if trace else None
-    bus = ZDTBus(
-        interface="can",
-        device=args.device,
+    endpoint = SocketCanEndpoint(
+        interface=args.device,
+        expected_bitrate=500_000,
+    )
+    bus = ZDTCanBus(
+        name="motor_can",
+        endpoint=endpoint,
         checksum=args.checksum,
         default_timeout_s=args.timeout,
         trace_callback=callback,

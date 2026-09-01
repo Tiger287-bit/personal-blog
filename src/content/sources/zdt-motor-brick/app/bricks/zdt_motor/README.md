@@ -37,14 +37,20 @@ ZDTMotor / RawMotorAPI
 `ZDTMotor` does not import or call `python-can`. Only
 `backends/socketcan.py` knows how SocketCAN is implemented.
 
-## Basic use
+## Basic use: one motor on can0
 
 ```python
-from zdt_motor import ZDTBus, ZDTMotor
+from zdt_motor import SocketCanEndpoint, ZDTCanBus, ZDTMotor
 
-with ZDTBus(interface="can", device="can0") as bus:
+can_endpoint = SocketCanEndpoint(
+    interface="can0",
+    expected_bitrate=500_000,
+    physical_port="VENTUNO Q FDCAN1 via CANnectivity",
+)
+
+with ZDTCanBus(name="motor_can", endpoint=can_endpoint) as can_bus:
     motor = ZDTMotor(
-        bus=bus,
+        bus=can_bus,
         model="X57S",
         motor_id=1,
         firmware="emm",
@@ -54,14 +60,33 @@ with ZDTBus(interface="can", device="can0") as bus:
     print(motor.get_status())
 ```
 
-One shared bus can serve any number of motor objects:
+`ZDTCanBus` clearly says that this object is a CAN bus. Its `endpoint`
+records which Linux SocketCAN interface it uses. `expected_bitrate` is
+configuration metadata for display and checking; it does not change Linux
+network settings or run `sudo ip link`.
+
+One physical CAN line should have one shared `ZDTCanBus` object. One or more
+motor objects on that line reuse it:
 
 ```python
-with ZDTBus(device="can0") as bus:
+with ZDTCanBus(endpoint=SocketCanEndpoint(interface="can0")) as can_bus:
     motors = [
-        ZDTMotor(bus=bus, model="X57S", motor_id=motor_id, firmware="emm")
+        ZDTMotor(bus=can_bus, model="X57S", motor_id=motor_id, firmware="emm")
         for motor_id in (1, 2, 3, 4)
     ]
+```
+
+Old code that imports `ZDTBus` or passes `device="can0"` still works. New
+code should use `ZDTCanBus` and `SocketCanEndpoint` because their meanings are
+clearer.
+
+Useful diagnostic fields:
+
+```python
+print(can_bus.kind.value)             # can
+print(can_bus.endpoint.interface)     # can0
+print(can_bus.endpoint.owner.value)   # linux
+print(can_bus.describe())
 ```
 
 ## User API
@@ -146,10 +171,17 @@ Brick 会按照构造 `ZDTMotor` 时提供的软件配置解释速度、角度�
 Brick 当前不会自动读取这些菜单参数，也不会静默猜测被修改过的配置。配置不一致时，
 即使 CAN 通信正常，电机的实际速度或位置也可能与代码目标不同。
 
-## V1 limits and future backends
+## V1 limits and future buses
 
-V1 is `SocketCAN / can0 only`. TTL, Pulse, RS485, RS232, Modbus, DMX512,
-CANopen are not implemented. `ZDTMotor` depends on the small bus contract
-`request + checksum + default_timeout_s`, not on the concrete `ZDTBus` class.
-A TTL version can therefore add `backends/mcu_uart.py`, `protocols/serial.py`,
-and `uart_bus.py` without rewriting `motor.py` or `commands/`.
+V1 implements Linux SocketCAN. It defaults to `can0`, but another existing
+SocketCAN interface can be selected with
+`SocketCanEndpoint(interface="can1")`. TTL, Pulse, RS485, RS232, Modbus,
+DMX512, and CANopen are not implemented.
+
+`ZDTCanBus` implements the common `ZDTMotorBus` contract. A future serial
+version should add a separate `ZDTSerialBus` and serial endpoint instead of
+adding serial switches to `ZDTCanBus`. `ZDTMotor`, commands, and result
+objects can then stay unchanged. On VENTUNO Q, MCU pins D0/D1 are not Linux
+device names: direct D0/D1 support should use an MCU/RouterBridge serial
+endpoint, while a Linux USB serial adapter should use a Linux serial-device
+endpoint.

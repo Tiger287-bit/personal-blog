@@ -9,7 +9,7 @@ Linux 宿主系统的 can0，因此这里也会把这一运行边界清楚地输
 import time
 
 from arduino.app_utils import App
-from zdt_motor import ZDTBus, ZDTError, ZDTMotor
+from zdt_motor import SocketCanEndpoint, ZDTCanBus, ZDTError, ZDTMotor
 
 
 probe_complete = False
@@ -23,9 +23,10 @@ def read_motor_safely():
     @param               : 无参数
     @return              : 电机基础信息字典
     """
-    with ZDTBus(interface="can", device="can0") as bus:
+    endpoint = SocketCanEndpoint(interface="can0", expected_bitrate=500_000)
+    with ZDTCanBus(name="motor_can", endpoint=endpoint) as can_bus:
         motor = ZDTMotor(
-            bus=bus,
+            bus=can_bus,
             model="X57S",
             motor_id=1,
             firmware="emm",

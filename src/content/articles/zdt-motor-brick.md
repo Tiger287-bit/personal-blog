@@ -16,6 +16,7 @@ environment:
 capabilities:
   - "Custom Brick"
   - "单电机对象"
+  - "显式 CAN 总线端点"
   - "多电机共用 CAN"
   - "Emm / X 固件"
   - "异步完成事件"
@@ -30,11 +31,18 @@ sourceDir: "zdt-motor-brick"
 
 这个 Brick 的设计重点是：**一个 `ZDTMotor` 对象只表示一台电机**。需要几台电机，就创建几个对象；Brick 本身不用修改。
 
-## 先认识三个名字
+当前版本使用 Linux SocketCAN。程序会先创建一个明确的 `ZDTCanBus`，再创建一个
+`SocketCanEndpoint` 告诉它使用哪个 Linux CAN 接口。这样代码一眼就能看出“这是
+CAN 总线，而且连接的是 `can0`”，以后增加串口时也不需要在 CAN 类中加入混杂的判断。
+
+## 先认识六个名字
 
 | 名称 | 简单理解 |
 | --- | --- |
 | Brick | 可以复制到其他 App 中重复使用的一组代码 |
+| `ZDTMotor` | 一台具体的 ZDT 电机对象 |
+| `ZDTCanBus` | 一条共享的 ZDT CAN 通信总线 |
+| `SocketCanEndpoint` | 记录总线使用哪个 Linux CAN 接口 |
 | `can0` | Linux 给当前 CAN 接口起的名字 |
 | `python-can` | 帮助 Python 通过 `can0` 收发 CAN 报文的库 |
 
@@ -71,7 +79,9 @@ app/
 ├── bricks/zdt_motor/
     ├── README.md                    # Brick 使用说明
     ├── motor.py                     # 普通用户主要调用的电机 API
-    ├── bus.py                       # 管理 can0 和多台电机的应答
+    ├── bus.py                       # ZDTCanBus及多台电机应答分发
+    ├── bus_base.py                  # 所有电机总线的公共接口
+    ├── endpoints.py                 # can0等系统接口的显式配置
     ├── commands/                    # 把转速、角度转换成命令参数
     ├── protocols/                   # 生成和解析 ZDT CAN 报文
     ├── backends/socketcan.py        # 使用 python-can 打开 can0
@@ -83,7 +93,8 @@ app/
 └── tests/test_bus.py               # 总线应答、异步事件、分包和同步启动测试
 ```
 
-`tests/` 和 `scripts/` 是验证工具，不影响 Brick 的正常使用。`test_bus.py` 专门检查普通应答、异步 `0x9F`、多电机应答分发、错误恢复和同步启动。
+`tests/` 和 `scripts/` 是验证工具，不影响 Brick 的正常使用。`test_bus.py` 专门检查
+总线类型、接口配置、旧接口兼容、普通应答、异步 `0x9F`、多电机应答分发、错误恢复和同步启动。
 
 左侧目录包含完整 App 文件。Python、C++、YAML 和 Markdown 等文本文件可以直接阅读；
 `.whl` 是二进制安装包，点击后会显示“无法在网页中阅读”，但可以下载原文件。GitHub
@@ -167,7 +178,7 @@ PASS: read-only motor communication and decoding succeeded
 
 将 `--id 1` 依次改成 `2`、`3`、`4`，即可检查四台电机。
 
-当前验证环境中，地址 1～4 均正确返回固件版本 `2.0.0` 和硬件类型 `57`。四个对象共用一个 `ZDTBus` 连续读取 10 轮，共 40 次请求全部成功；接收线程没有异常，测试后 CAN 的发送错误、接收错误、丢帧和 bus-off 均为 0。
+当前验证环境中，地址 1～4 均正确返回固件版本 `2.0.0` 和硬件类型 `57`。四个对象共用一个 `ZDTCanBus` 连续读取 10 轮，共 40 次请求全部成功；接收线程没有异常，测试后 CAN 的发送错误、接收错误、丢帧和 bus-off 均为 0。
 
 这些结果只验证通信与只读解析，没有让电机运动。
 
@@ -176,12 +187,18 @@ PASS: read-only motor communication and decoding succeeded
 下面的代码创建地址为 `1` 的 X57S 电机，并读取转速、位置和状态：
 
 ```python
-from zdt_motor import ZDTBus, ZDTMotor
+from zdt_motor import SocketCanEndpoint, ZDTCanBus, ZDTMotor
 
 
-with ZDTBus(device="can0") as bus:
+can_endpoint = SocketCanEndpoint(
+    interface="can0",
+    expected_bitrate=500_000,
+    physical_port="VENTUNO Q FDCAN1 via CANnectivity",
+)
+
+with ZDTCanBus(name="motor_can", endpoint=can_endpoint) as can_bus:
     motor = ZDTMotor(
-        bus=bus,
+        bus=can_bus,
         model="X57S",
         motor_id=1,
         firmware="emm",
@@ -196,25 +213,31 @@ with ZDTBus(device="can0") as bus:
 
 | 参数 | 含义 |
 | --- | --- |
-| `device="can0"` | 使用 Linux 的 `can0` 接口 |
+| `name="motor_can"` | 这条总线在日志和诊断信息中的名称 |
+| `interface="can0"` | 使用 Linux 的 `can0` 接口 |
+| `expected_bitrate=500_000` | 记录这条总线预期使用 500 kbit/s |
+| `physical_port=...` | 可选的人类可读物理接口说明 |
 | `model="X57S"` | 电机型号 |
 | `motor_id=1` | 电机的 CAN 地址 |
 | `firmware="emm"` | 电机菜单中的固件类型是 `FW_Emm` |
 
-`motor_id` 不是电机数量，而是这一台电机的地址。
+`motor_id` 不是电机数量，而是这一台电机的地址。`expected_bitrate` 是用于显示和检查的
+配置记录，不会自动修改 Linux 接口，也不会在 Brick 内执行 `sudo ip link`。
 
 ## 创建四台电机
 
-四台电机连接在同一条 CAN 总线上，所以只创建一个 `ZDTBus`。然后为每个地址创建一个 `ZDTMotor`：
+四台电机连接在同一条 CAN 总线上，所以只创建一个 `ZDTCanBus`。然后为每个地址创建一个 `ZDTMotor`：
 
 ```python
-from zdt_motor import ZDTBus, ZDTMotor
+from zdt_motor import SocketCanEndpoint, ZDTCanBus, ZDTMotor
 
 
-with ZDTBus(device="can0") as bus:
+can_endpoint = SocketCanEndpoint(interface="can0", expected_bitrate=500_000)
+
+with ZDTCanBus(name="motor_can", endpoint=can_endpoint) as can_bus:
     motors = {
         motor_id: ZDTMotor(
-            bus=bus,
+            bus=can_bus,
             model="X57S",
             motor_id=motor_id,
             firmware="emm",
@@ -226,9 +249,29 @@ with ZDTBus(device="can0") as bus:
         print(motor_id, motor.get_speed())
 ```
 
-所有对象共用同一个 `bus`。`ZDTBus` 会根据电机地址，把收到的应答交给正确的 `ZDTMotor` 对象。
+所有对象共用同一个 `can_bus`。`ZDTCanBus` 会根据电机地址，把收到的应答交给正确的 `ZDTMotor` 对象。
 
 如果以后只使用两台电机，只需要把地址改成 `(1, 2)`，不需要修改 Brick。
+
+## 查看总线和接口信息
+
+`ZDTCanBus` 的类名已经说明它是一条 CAN 总线，`endpoint` 则说明它连接到哪个系统接口：
+
+```python
+print(can_bus.kind.value)             # can
+print(can_bus.endpoint.interface)     # can0
+print(can_bus.endpoint.owner.value)   # linux
+print(can_bus.describe())
+```
+
+默认端点是 `can0 / 500000 bit/s`。如果系统中已经存在另一个 SocketCAN 接口，可以显式写成：
+
+```python
+endpoint = SocketCanEndpoint(interface="can1", expected_bitrate=500_000)
+```
+
+一个物理 CAN 总线只创建一个 `ZDTCanBus`，连接在这条线上的电机共用它。旧代码中的
+`ZDTBus(device="can0")` 仍然可以运行，但新代码推荐使用含义更清楚的类名和端点对象。
 
 ## 常用方法
 
@@ -244,8 +287,8 @@ with ZDTBus(device="can0") as bus:
 | 设置速度 | `set_speed(...)` | 设置方向、RPM 和加速度 |
 | 相对移动 | `move_relative(...)` | 从当前位置移动指定角度 |
 | 绝对移动 | `move_absolute(...)` | 移动到指定位置 |
-| 读取异步事件 | `bus.next_event(...)` | 读取电机主动返回的完成事件 |
-| 同步启动 | `bus.start_synchronized()` | 同时触发已经缓存的多电机命令 |
+| 读取异步事件 | `can_bus.next_event(...)` | 读取电机主动返回的完成事件 |
+| 同步启动 | `can_bus.start_synchronized()` | 同时触发已经缓存的多电机命令 |
 
 控制电机运动前，应先架空车轮、清理机械运动范围，并准备物理急停。
 
@@ -259,7 +302,7 @@ motors[2].set_speed(20, acceleration=10, synchronized=True)
 motors[3].set_speed(20, acceleration=10, synchronized=True)
 motors[4].set_speed(20, acceleration=10, synchronized=True)
 
-bus.start_synchronized()
+can_bus.start_synchronized()
 ```
 
 `start_synchronized()` 发送广播扩展帧：`CAN-ID=0x0000`，数据为 `FF 66 6B`。广播命令不会等待某一台电机单独应答。
@@ -271,7 +314,7 @@ bus.start_synchronized()
 Brick 会把两者分开处理：普通状态用于完成当前请求，`0x9F` 放入异步事件队列。这样上一条命令的完成通知不会被误认为下一条同功能命令的应答。
 
 ```python
-event = bus.next_event(timeout_s=0.5)
+event = can_bus.next_event(timeout_s=0.5)
 if event is not None:
     print(event.address, event.function_code, event.data.hex())
 ```
@@ -300,14 +343,20 @@ commands
     ↓ 按 Emm 或 X 固件排列参数
 protocols
     ↓ 生成 CAN ID、分包并添加校验码
-ZDTBus
+ZDTCanBus
     ↓ 按地址和功能码分发应答，并单独保存异步 0x9F 事件
 SocketCANBackend
     ↓
-Linux can0
+SocketCanEndpoint → Linux can0
 ```
 
-每一层只处理一类问题，所以以后增加其他通信方式时，不必重新编写上层电机 API。
+`ZDTCanBus` 实现 `ZDTMotorBus` 规定的公共接口。以后增加串口时，应新建独立的
+`ZDTSerialBus` 和串口端点，而不是在 `ZDTCanBus` 中加入串口开关。这样
+`ZDTMotor`、命令对象和返回结果可以继续复用。
+
+VENTUNO Q 的 D0/D1 属于 MCU 引脚，不是 Linux 串口设备名。未来如果通过 D0/D1 控制
+电机，需要设计 MCU/RouterBridge 串口端点；如果使用 Linux USB 转串口，则应设计
+Linux 串口设备端点。当前版本没有假装实现这些尚未验证的串口路径。
 
 ## VENTUNO Q 上的 CAN 路径
 
@@ -346,8 +395,9 @@ FDCAN1 → CANnectivity → gs_usb → Linux SocketCAN → can0
 
 ## 当前范围
 
-当前版本面向 ZDT X57S 第二代电机和 Linux `can0`。已经封装常用读取、使能、停止、速度、位置、回零和基础配置接口。
+当前版本面向 ZDT X57S 第二代电机和 Linux SocketCAN，默认接口是 `can0`，也可以显式
+选择系统中已经存在的其他 SocketCAN 接口。已经封装常用读取、使能、停止、速度、位置、回零和基础配置接口。
 
 手册中只明确标注给其他型号的功能不会向 X57S 发送。TTL、RS485、CANopen 等其他通信方式也不在这个版本中。
 
-当前源码已通过 39 项自动测试，并在 VENTUNO Q 上完成地址 1、2、3、4 四台 X57S 电机的只读 CAN 实机验证。同步启动帧和异步 `0x9F` 分发已经由自动测试覆盖；真实运动测试应在车轮架空并准备物理急停后单独进行。
+当前源码已通过 47 项自动测试，并在 VENTUNO Q 上完成地址 1、2、3、4 四台 X57S 电机的只读 CAN 实机验证。同步启动帧、异步 `0x9F` 分发、显式 CAN 端点和旧 `ZDTBus` 兼容性已经由自动测试覆盖；真实运动测试应在车轮架空并准备物理急停后单独进行。
