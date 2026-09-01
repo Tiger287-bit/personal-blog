@@ -178,9 +178,13 @@ def validate_number(name, value, minimum, maximum):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ZDTConfigurationError(f"{name} must be a number")
     normalized = float(value)
-    if normalized < minimum or normalized > maximum:
+    if (
+        not math.isfinite(normalized)
+        or normalized < minimum
+        or normalized > maximum
+    ):
         raise ZDTConfigurationError(
-            f"{name} must be in range {minimum}-{maximum}"
+            f"{name} must be a finite number in range {minimum}-{maximum}"
         )
     return normalized
 
@@ -200,5 +204,24 @@ def validate_positive_number(name, value):
     if not math.isfinite(normalized) or normalized <= 0:
         raise ZDTConfigurationError(
             f"{name} must be a finite positive number"
+        )
+    return normalized
+
+
+def validate_nonnegative_number(name, value):
+    """
+    @description         : 校验有限且不小于零的数值并转换为浮点数
+    @param name          : 参数名称
+    @param value         : 待校验数值
+    @return              : 合法浮点数
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ZDTConfigurationError(
+            f"{name} must be a finite non-negative number"
+        )
+    normalized = float(value)
+    if not math.isfinite(normalized) or normalized < 0:
+        raise ZDTConfigurationError(
+            f"{name} must be a finite non-negative number"
         )
     return normalized

@@ -3,7 +3,7 @@
 import socket
 
 from .base import CanBackend, CanFrame
-from ..config import validate_positive_number
+from ..config import validate_nonnegative_number
 from ..errors import ZDTBackendError, ZDTConfigurationError
 
 
@@ -90,7 +90,7 @@ class SocketCANBackend(CanBackend):
         @param timeout_s     : 最大等待秒数
         @return              : CanFrame或None
         """
-        normalized_timeout = validate_positive_number("timeout_s", timeout_s)
+        normalized_timeout = validate_nonnegative_number("timeout_s", timeout_s)
         try:
             message = self._require_bus().recv(timeout=normalized_timeout)
         except Exception as error:

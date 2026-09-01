@@ -12,6 +12,7 @@ from .config import (
     ChecksumType,
     parse_checksum_type,
     validate_motor_id,
+    validate_nonnegative_number,
     validate_positive_number,
 )
 from .endpoints import SocketCanEndpoint
@@ -293,7 +294,7 @@ class ZDTCanBus(ZDTMotorBus):
         @param address       : 发送目标地址，可为广播地址0
         @param command       : LogicalCommand
         @param timeout_s     : 可选本次超时秒数
-        @param response_address: 广播命令对应的应答电机地址
+        @param response_address: None使用发送地址；整数或地址集合限制允许应答的地址
         @return              : ZDTResponse
         """
         if not isinstance(command, LogicalCommand):
@@ -359,8 +360,9 @@ class ZDTCanBus(ZDTMotorBus):
         @param timeout_s     : 最大等待秒数，0表示立即返回
         @return              : ZDTResponse或None
         """
+        normalized_timeout = validate_nonnegative_number("timeout_s", timeout_s)
         try:
-            return self._events.get(timeout=max(0.0, float(timeout_s)))
+            return self._events.get(timeout=normalized_timeout)
         except queue.Empty:
             return None
 

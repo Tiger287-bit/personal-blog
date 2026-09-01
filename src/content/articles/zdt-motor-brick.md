@@ -5,8 +5,8 @@ section: "bricks"
 order: 4
 status: "verified"
 pubDate: "2026-09-01"
-updatedDate: "2026-09-01"
-verifiedDate: "2026-09-01"
+updatedDate: "2026-09-02"
+verifiedDate: "2026-09-02"
 environment:
   - "Arduino VENTUNO Q"
   - "Arduino App CLI 0.12.1"
@@ -22,6 +22,7 @@ capabilities:
   - "异步完成事件"
   - "多电机同步启动"
   - "CAN V1 稳定接口"
+  - "严格数值边界"
 sourceDir: "zdt-motor-brick"
 ---
 
@@ -65,6 +66,7 @@ CAN V1 已经固定公开接口。以后即使 Brick 内部继续修复或优化
 | 电机与总线 | `ZDTMotor`、`ZDTCanBus` | 创建电机对象和共享 CAN 总线 |
 | 总线契约 | `ZDTMotorBus` | 为以后新增其他通信总线保留统一电机接口 |
 | 接口配置 | `SocketCanEndpoint` | 指定 `can0` 等 Linux SocketCAN 接口 |
+| 总线描述 | `BusKind`、`BusTrace`、`EndpointOwner` | 描述总线类型、原始帧跟踪和接口归属 |
 | 电机配置 | `MotorConfig` | 保存型号、固件、地址、校验、细分和超时 |
 | 枚举 | `ChecksumType`、`Firmware`、`Direction`、`MotionMode`、`HomeMode` | 避免使用含义不清的数字或字符串 |
 | 兼容名称 | `ZDTBus` | 旧代码兼容别名；新代码使用 `ZDTCanBus` |
@@ -94,8 +96,16 @@ request(
 )
 ```
 
-`timeout_s` 表示本次请求的超时秒数；`response_address` 用于修改电机地址后，应答可能从
-旧地址或新地址返回的特殊场景。
+`timeout_s` 表示本次请求的超时秒数。`response_address` 的正式规则如下：
+
+| 参数值 | 当前请求接受的应答地址 |
+| --- | --- |
+| `None` | 只接受发送地址 `address` |
+| `int` | 只接受指定的一个地址 |
+| `tuple/list/set/frozenset[int]` | 接受集合中任意地址；第一个有效匹配应答完成请求 |
+
+这个参数主要用于 `set_motor_id()`：地址写入后，应答可能从旧地址或新地址返回。普通
+电机命令保持 `None` 即可。
 
 ## 使用前需要确认
 
@@ -168,7 +178,8 @@ app/
 `tests/` 和 `scripts/` 是验证工具，不影响 Brick 的正常使用。`test_architecture.py` 防止
 命令层依赖 CAN、Raw API 暴露 CAN 帧或 `python-can` 扩散到其他模块；`test_bus.py`
 检查普通应答、异步 `0x9F`、多电机应答分发、错误恢复和同步启动；
-`test_v1_contract.py` 固定 V1 公开请求参数、超时规则、接口名处理和逻辑应答语义。
+`test_v1_contract.py` 固定 V1 公开请求参数、请求与轮询超时规则、有限数值边界、公开导出、
+接口名处理和逻辑应答语义。
 
 左侧目录包含完整 App 文件。Python、C++、YAML 和 Markdown 等文本文件可以直接阅读；
 `.whl` 是二进制安装包，点击后会显示“无法在网页中阅读”，但可以下载原文件。GitHub
@@ -395,14 +406,23 @@ Brick 不会自动发现或创建 `can1`。VENTUNO Q V1 正式验证的仍然只
 接口名会自动去除首尾空格，例如 `"  can0  "` 会按 `"can0"` 使用。空字符串或只包含
 空格的接口名会在打开 CAN 之前抛出 `ZDTConfigurationError`。
 
-下面三个位置的超时参数使用同一套规则：
+请求超时用于已经发送命令、正在等待电机应答的场景：
 
 - `ZDTCanBus(default_timeout_s=...)`；
 - `bus.request(..., timeout_s=...)`；
 - `MotorConfig(timeout_s=...)`。
 
-超时必须是有限且大于零的 `int` 或 `float`。`0.5` 和 `1` 合法；`True`、`False`、`0`、
-负数、字符串、`NaN` 和正负无穷都不合法，并统一抛出 `ZDTConfigurationError`。
+请求超时必须是有限且大于零的 `int` 或 `float`。`0.5` 和 `1` 合法；`True`、`False`、
+`0`、负数、字符串、`NaN` 和正负无穷都不合法。
+
+轮询等待时间用于检查当前是否已有 CAN 帧或异步事件：
+
+- `SocketCANBackend.receive(timeout_s)`；
+- `can_bus.next_event(timeout_s)`。
+
+轮询允许 `0`，表示立即检查、不阻塞；也允许 `0.2` 等正数，表示最多等待对应秒数。
+负数、布尔值、字符串、`NaN` 和正负无穷仍然不合法。所有非法数值统一抛出
+`ZDTConfigurationError`，不会再被静默改成 `0`。
 
 ```python
 can_bus = ZDTCanBus(
@@ -412,6 +432,10 @@ can_bus = ZDTCanBus(
 ```
 
 这类错误会在真正访问 CAN 前被发现，因此不会因为错误配置而发送电机命令。
+
+速度、角度及 X 固件运动参数也必须是有限数值。`set_speed(float("nan"))`、
+`move_relative(float("nan"))`、`move_absolute(float("inf"))` 等调用会在编码和发送 CAN
+报文前被拒绝。
 
 ## 常用方法
 
@@ -619,13 +643,14 @@ python3 -B -m unittest discover -s tests -v
 全部通过时结尾应显示：
 
 ```text
-Ran 68 tests
+Ran 76 tests
 
 OK
 ```
 
-这 68 项测试同时覆盖命令编码、应答解析、分包重组、多电机分发、异步完成事件、错误恢复、
-公开 Bus 契约、超时边界、SocketCAN 接口名规范化和 `ZDTResponse.raw` 语义。
+这 76 项测试同时覆盖命令编码、应答解析、分包重组、多电机分发、异步完成事件、错误恢复、
+公开 Bus 契约、请求与轮询超时边界、`NaN/Inf` 运动参数拦截、公共 API、SocketCAN 接口名
+规范化和 `ZDTResponse.raw` 语义。
 
 ## 当前范围
 
@@ -634,7 +659,7 @@ OK
 
 手册中只明确标注给其他型号的功能不会向 X57S 发送。TTL、RS485、CANopen 等其他通信方式也不在这个版本中。
 
-配套源码保存了 68 项永久回归测试，覆盖命令、协议、Backend、正式 Bus 契约、
+配套源码保存了 76 项永久回归测试，覆盖命令、协议、Backend、正式 Bus 契约、
 `0xF5/0x9A/0xFD` 完成事件、有界事件队列、溢出计数、多电机分发、错误恢复、同步启动和
-超时及 `SocketCanEndpoint` 规范化。VENTUNO Q 上的地址 1、2、3、4 四台 X57S 已完成共享总线
+严格数值边界及 `SocketCanEndpoint` 规范化。VENTUNO Q 上的地址 1、2、3、4 四台 X57S 已完成共享总线
 只读测试和逐台 `10 RPM / +30°` 运动测试，测试结束后全部停止并失能，CAN 错误计数保持为 0。

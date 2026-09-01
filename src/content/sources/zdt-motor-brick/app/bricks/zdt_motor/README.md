@@ -54,6 +54,9 @@ ZDTCanBus
 ZDTBus
 ZDTMotorBus
 SocketCanEndpoint
+BusKind
+BusTrace
+EndpointOwner
 
 ChecksumType
 Firmware
@@ -93,6 +96,51 @@ backends/*
 ```
 
 内部实现可以继续修正缺陷，但不能破坏上面的稳定公共 API。
+
+### 请求超时与轮询等待时间
+
+请求超时用于已经发送命令、正在等待电机应答的场景，必须是有限且大于零的数值：
+
+```text
+ZDTCanBus(default_timeout_s=...)
+MotorConfig(timeout_s=...)
+bus.request(..., timeout_s=...)
+```
+
+轮询等待时间允许填写 `0`，表示只检查当前队列并立即返回，不阻塞线程：
+
+```text
+SocketCANBackend.receive(timeout_s)
+bus.next_event(timeout_s)
+```
+
+两类参数都拒绝布尔值、字符串、`NaN` 和正负无穷。请求超时还会拒绝 `0`；轮询等待
+时间只拒绝负数。所有这些非法数值统一抛出 `ZDTConfigurationError`。
+
+### response_address 契约
+
+`ZDTMotorBus.request()` 的正式签名是：
+
+```python
+request(
+    address,
+    command,
+    *,
+    timeout_s=None,
+    response_address=None,
+)
+```
+
+`response_address` 决定当前请求接受哪些电机地址的应答：
+
+| 参数值 | 应答地址规则 |
+| --- | --- |
+| `None` | 只接受发送地址 `address` 返回的应答 |
+| `int` | 只接受这个指定地址返回的应答 |
+| `tuple/list/set/frozenset[int]` | 允许集合中的任意地址；第一个有效匹配应答完成请求 |
+
+主要使用场景是 `set_motor_id()`：地址写入后，确认应答可能来自旧地址，也可能来自新地址。
+普通电机命令不需要填写 `response_address`。
 
 ## Basic use: one motor on can0
 

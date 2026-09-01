@@ -80,7 +80,9 @@ class ZDTMotorBus(ABC):
         @param address       : 发送目标电机地址
         @param command       : LogicalCommand
         @param timeout_s     : 本次请求超时时间，None表示使用Bus默认值
-        @param response_address: 允许应答出现的地址，可用于修改电机ID等场景
+        @param response_address: None表示应答必须来自address；整数表示只接受该地址；
+                                tuple/list/set/frozenset表示允许其中任一地址，首个有效
+                                匹配应答完成请求；主要用于修改电机ID后的应答地址兼容
         @return              : ZDTResponse
         """
 
