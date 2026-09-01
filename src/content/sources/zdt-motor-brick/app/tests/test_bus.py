@@ -17,7 +17,8 @@ from zdt_motor import (
     ZDTProtocolError,
 )
 from zdt_motor.backends import CanFrame
-from zdt_motor.protocols import LogicalCommand, calculate_checksum, split_can_frames
+from zdt_motor.messages import LogicalCommand
+from zdt_motor.protocols import calculate_checksum, split_can_frames
 
 
 def response_frames(address, function_code, data):

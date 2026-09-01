@@ -2,10 +2,10 @@
 
 import queue
 
-from zdt_motor.backends import MotorBackend
+from zdt_motor.backends import CanBackend
 
 
-class FakeBackend(MotorBackend):
+class FakeBackend(CanBackend):
     """记录发送帧并从内存队列返回接收帧。"""
 
     def __init__(self, on_send=None):

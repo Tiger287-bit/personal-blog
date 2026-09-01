@@ -31,11 +31,11 @@ sourceDir: "zdt-motor-brick"
 
 这个 Brick 的设计重点是：**一个 `ZDTMotor` 对象只表示一台电机**。需要几台电机，就创建几个对象；Brick 本身不用修改。
 
-当前版本使用 Linux SocketCAN。程序会先创建一个明确的 `ZDTCanBus`，再创建一个
-`SocketCanEndpoint` 告诉它使用哪个 Linux CAN 接口。这样代码一眼就能看出“这是
-CAN 总线，而且连接的是 `can0`”，以后增加串口时也不需要在 CAN 类中加入混杂的判断。
+当前 V1 只正式支持 VENTUNO Q 上已经验证的 Linux SocketCAN `can0`。程序会先创建一个
+明确的 `ZDTCanBus`，再创建一个 `SocketCanEndpoint` 描述它连接的 Linux CAN 接口。
+电机对象不需要知道 `can0`、SocketCAN、CAN ID 或分包规则，这些都由 CAN 层负责。
 
-## 先认识六个名字
+## 先认识八个名字
 
 | 名称 | 简单理解 |
 | --- | --- |
@@ -43,6 +43,8 @@ CAN 总线，而且连接的是 `can0`”，以后增加串口时也不需要在
 | `ZDTMotor` | 一台具体的 ZDT 电机对象 |
 | `ZDTCanBus` | 一条共享的 ZDT CAN 通信总线 |
 | `SocketCanEndpoint` | 记录总线使用哪个 Linux CAN 接口 |
+| `LogicalCommand` | 尚未转换成 CAN 报文的 ZDT 逻辑命令 |
+| `ZDTCanProtocol` | 把逻辑命令转换成 CAN ID 和 CAN 帧 |
 | `can0` | Linux 给当前 CAN 接口起的名字 |
 | `python-can` | 帮助 Python 通过 `can0` 收发 CAN 报文的库 |
 
@@ -85,7 +87,7 @@ Brick 不会自动读取或猜测电机菜单参数。CAN 通信正常但参数�
 
 ## 配套源码
 
-文章左侧的“配套源码”可以展开文件夹并打开每个文件。第一次阅读时，先看下面五个文件即可：
+文章左侧的“配套源码”可以展开文件夹并打开每个文件。第一次阅读时，建议按下面的结构阅读：
 
 ```text
 app/
@@ -95,22 +97,30 @@ app/
 ├── bricks/zdt_motor/
     ├── README.md                    # Brick 使用说明
     ├── motor.py                     # 普通用户主要调用的电机 API
-    ├── bus.py                       # ZDTCanBus及多台电机应答分发
-    ├── bus_base.py                  # 所有电机总线的公共接口
-    ├── endpoints.py                 # can0等系统接口的显式配置
+    ├── messages.py                  # LogicalCommand与ZDTResponse
+    ├── bus.py                       # ZDTCanBus及多电机应答分发
+    ├── bus_base.py                  # ZDTMotorBus正式公共契约
+    ├── endpoints.py                 # can0等SocketCAN接口配置
     ├── commands/                    # 把转速、角度转换成命令参数
-    ├── protocols/                   # 生成和解析 ZDT CAN 报文
-    ├── backends/socketcan.py        # 使用 python-can 打开 can0
+    ├── protocols/
+    │   ├── can.py                   # CAN ID、分包、重组和应答校验
+    │   └── checksum.py              # 0x6B、XOR与CRC8校验
+    ├── backends/
+    │   ├── base.py                  # CanFrame与CanBackend接口
+    │   └── socketcan.py             # 唯一直接使用python-can的文件
     └── vendor/                      # 可离线安装的Python依赖
         ├── python_can-4.6.1-py3-none-any.whl
         ├── packaging-26.3-py3-none-any.whl
         ├── typing_extensions-4.16.0-py3-none-any.whl
         └── wrapt-1.17.3-...-aarch64.whl
-└── tests/test_bus.py               # 总线应答、异步事件、分包和同步启动测试
+└── tests/
+    ├── test_architecture.py         # V1架构边界永久测试
+    └── test_bus.py                  # 应答、事件、分包和同步启动测试
 ```
 
-`tests/` 和 `scripts/` 是验证工具，不影响 Brick 的正常使用。`test_bus.py` 专门检查
-总线类型、接口配置、旧接口兼容、普通应答、异步 `0x9F`、多电机应答分发、错误恢复和同步启动。
+`tests/` 和 `scripts/` 是验证工具，不影响 Brick 的正常使用。`test_architecture.py` 防止
+命令层依赖 CAN、Raw API 暴露 CAN 帧或 `python-can` 扩散到其他模块；`test_bus.py`
+检查普通应答、异步 `0x9F`、多电机应答分发、错误恢复和同步启动。
 
 左侧目录包含完整 App 文件。Python、C++、YAML 和 Markdown 等文本文件可以直接阅读；
 `.whl` 是二进制安装包，点击后会显示“无法在网页中阅读”，但可以下载原文件。GitHub
@@ -320,11 +330,14 @@ print(can_bus.endpoint.owner.value)   # linux
 print(can_bus.describe())
 ```
 
-默认端点是 `can0 / 500000 bit/s`。如果系统中已经存在另一个 SocketCAN 接口，可以显式写成：
+默认端点是 `can0 / 500000 bit/s`。代码允许显式填写另一个已经存在的 SocketCAN 接口：
 
 ```python
 endpoint = SocketCanEndpoint(interface="can1", expected_bitrate=500_000)
 ```
+
+Brick 不会自动发现或创建 `can1`。VENTUNO Q V1 正式验证的仍然只有系统 CANnectivity
+提供的 `can0`；填写其他接口名不代表该硬件路径已经验证。
 
 一个物理 CAN 总线只创建一个 `ZDTCanBus`，连接在这条线上的电机共用它。旧代码中的
 `ZDTBus(device="can0")` 仍然可以运行，但新代码推荐使用含义更清楚的类名和端点对象。
@@ -345,8 +358,37 @@ endpoint = SocketCanEndpoint(interface="can1", expected_bitrate=500_000)
 | 绝对移动 | `move_absolute(...)` | 移动到指定位置 |
 | 读取异步事件 | `can_bus.next_event(...)` | 读取电机主动返回的完成事件 |
 | 同步启动 | `can_bus.start_synchronized()` | 同时触发已经缓存的多电机命令 |
+| 发送原始逻辑命令 | `motor.raw.request(...)` | 不需要自己处理CAN帧 |
+| 查看CAN编码 | `can_bus.encode_frames(...)` | 只编码，不发送 |
 
 控制电机运动前，应先架空车轮、清理机械运动范围，并准备物理急停。
+
+## 原始逻辑命令与 CAN 帧
+
+`motor.raw` 表示“原始 ZDT 逻辑命令”，不是“原始 CAN 帧”。发送手册中尚未封装的
+ZDT 功能码时，可以使用：
+
+```python
+response = motor.raw.request(
+    0x35,
+    payload=b"",
+    expected_response_length=5,
+)
+```
+
+`RawMotorAPI` 会构造 `LogicalCommand`，再交给当前 `ZDTMotorBus`。它不会计算 CAN ID，
+也不再提供 `motor.raw.frames()`。
+
+只有在调试 CAN 编码时，才需要从 CAN 总线对象查看帧：
+
+```python
+from zdt_motor.commands.common import build_raw
+
+command = build_raw(0x36, expected_response_length=7)
+frames = can_bus.encode_frames(motor.motor_id, command)
+```
+
+`encode_frames()` 只返回编码结果，不会把帧发送到总线。
 
 ## 同步启动多台电机
 
@@ -417,37 +459,50 @@ Brick 不会自动猜测固件类型。填错后可能导致命令失败，也�
 你的 Python 代码
     ↓ 调用 get_speed()、set_speed() 等方法
 ZDTMotor
-    ↓ 把 RPM、角度、方向转换成逻辑命令
-commands
-    ↓ 按 Emm 或 X 固件排列参数
-protocols
-    ↓ 生成 CAN ID、分包并添加校验码
+    ↓ 调用commands并得到LogicalCommand
+commands/common.py、commands/emm.py、commands/x.py
+    ↓ LogicalCommand与ZDTResponse定义在messages.py
+ZDTMotorBus正式契约
+    ↓ 当前V1实现
 ZDTCanBus
-    ↓ 按地址和功能码分发应答，并单独保存异步 0x9F 事件
+    ↓ 多电机请求、应答、事件、线程和超时
+ZDTCanProtocol
+    ↓ CAN ID、校验、分包与重组
+CanBackend
+    ↓ 经典CanFrame搬运
 SocketCANBackend
     ↓
 SocketCanEndpoint → Linux can0
 ```
 
 `ZDTCanBus` 实现 `ZDTMotorBus` 规定的公共接口，包括总线种类、端点、校验方式、
-默认超时、打开、关闭、请求和诊断信息。这样任何声称实现 `ZDTMotorBus` 的对象都具备
-`ZDTMotor` 真正需要的完整能力。以后增加串口时，应新建独立的
-`ZDTSerialBus` 和串口端点，而不是在 `ZDTCanBus` 中加入串口开关。这样
-`ZDTMotor`、命令对象和返回结果可以继续复用。
+默认超时、打开、关闭、请求和诊断信息。`ZDTMotor` 会明确检查传入对象是否实现
+`ZDTMotorBus`，不再同时维护一套手工 `hasattr()` 契约。
 
-VENTUNO Q 的 D0/D1 属于 MCU 引脚，不是 Linux 串口设备名。未来如果通过 D0/D1 控制
-电机，需要设计 MCU/RouterBridge 串口端点；如果使用 Linux USB 转串口，则应设计
-Linux 串口设备端点。当前版本没有假装实现这些尚未验证的串口路径。
+V1 不实现 UART、TTL、RS485、Modbus RTU、D0/D1、Bridge UART、Bridge CAN 或
+`can1` 自动发现，也不为它们创建空类和 Factory。以后出现真实需求时，新增对应的
+Bus、Protocol、Backend 和 Endpoint；`ZDTMotor` 与命令层原则上保持不变。
 
 ## VENTUNO Q 上的 CAN 路径
 
-当前开发板通过下面的链路把 MCU 的 FDCAN1 提供给 Linux：
+当前开发板通过下面的链路把螺钉式 CAN 接口提供给 Linux：
 
 ```text
-FDCAN1 → CANnectivity → gs_usb → Linux SocketCAN → can0
+VENTUNO Q CAN螺钉座
+  → FDCAN1
+  → 系统CANnectivity
+  → gs_usb
+  → Linux SocketCAN
+  → can0
+  → SocketCANBackend
+  → ZDTCanBus
+  → ZDTMotor
 ```
 
-因此示例 Sketch 只调用 `Bridge.begin()`，不会再调用 Arduino CAN 库。否则 Sketch 和 Linux 可能同时争用同一个 FDCAN1。
+这是 V1 唯一正式支持并经过实机验证的路径。因此示例 Sketch 只调用 `Bridge.begin()`，
+不会调用 `CAN.begin()`、`CAN.write()`、`CAN.available()` 或 `CAN.read()` 再次操作 FDCAN1。
+在当前 ArduinoCore-zephyr / loader 环境中，电机返回帧会进入 CANnectivity 到 Linux
+`can0` 的路径，但不会同时进入 Sketch 的 Arduino CAN 轮询队列。
 
 ## 为什么不能直接在 App 的 main.py 中看到 can0
 
@@ -476,12 +531,12 @@ FDCAN1 → CANnectivity → gs_usb → Linux SocketCAN → can0
 
 ## 当前范围
 
-当前版本面向 ZDT X57S 第二代电机和 Linux SocketCAN，默认接口是 `can0`，也可以显式
-选择系统中已经存在的其他 SocketCAN 接口。已经封装常用读取、使能、停止、速度、位置、回零和基础配置接口。
+当前版本面向 ZDT X57S 第二代电机，正式支持 VENTUNO Q 的 Linux SocketCAN `can0`。
+已经封装常用读取、使能、停止、速度、位置、回零和基础配置接口。
 
 手册中只明确标注给其他型号的功能不会向 X57S 发送。TTL、RS485、CANopen 等其他通信方式也不在这个版本中。
 
-当前源码已通过 47 项长期回归测试；本轮稳定化还通过了 10 项不写入项目的专项验收，
-覆盖完整总线契约、`0xF5/0x9A` 完成事件、有界队列、溢出计数、字符串正规化和旧
-`ZDTBus` 兼容性。VENTUNO Q 上的地址 1、2、3、4 四台 X57S 已完成共享总线只读测试
-和逐台 `10 RPM / +30°` 运动测试，测试结束后全部停止并失能，CAN 错误计数保持为 0。
+配套源码保存了 59 项永久回归测试，覆盖命令、协议、Backend、正式 Bus 契约、
+`0xF5/0x9A/0xFD` 完成事件、有界事件队列、溢出计数、多电机分发、错误恢复、同步启动和
+`SocketCanEndpoint` 规范化。VENTUNO Q 上的地址 1、2、3、4 四台 X57S 已完成共享总线
+只读测试和逐台 `10 RPM / +30°` 运动测试，测试结束后全部停止并失能，CAN 错误计数保持为 0。

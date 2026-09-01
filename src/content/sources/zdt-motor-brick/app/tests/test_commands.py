@@ -4,7 +4,7 @@ import unittest
 
 from zdt_motor import ZDTConfigurationError
 from zdt_motor.commands import common, emm, x
-from zdt_motor.protocols import ZDTProtocol
+from zdt_motor.protocols import ZDTCanProtocol
 
 
 def encoded_data(command, address=1):
@@ -14,7 +14,7 @@ def encoded_data(command, address=1):
     @param address       : 电机地址
     @return              : 单帧CAN DATA
     """
-    frames = ZDTProtocol().encode_command(address, command)
+    frames = ZDTCanProtocol().encode_command(address, command)
     if len(frames) != 1:
         raise AssertionError("test helper expected one CAN frame")
     return frames[0].data
@@ -94,7 +94,7 @@ class CommandTests(unittest.TestCase):
             acceleration=0,
             mode="relative_current",
         )
-        frames = ZDTProtocol().encode_command(1, command)
+        frames = ZDTCanProtocol().encode_command(1, command)
         self.assertEqual(frames[0].data, bytes.fromhex("FD 00 05 DC 00 00 00 0C"))
         self.assertEqual(frames[1].data, bytes.fromhex("FD 80 02 00 6B"))
 
@@ -111,7 +111,7 @@ class CommandTests(unittest.TestCase):
             deceleration=506,
             mode="relative_last",
         )
-        frames = ZDTProtocol().encode_command(1, command)
+        frames = ZDTCanProtocol().encode_command(1, command)
         self.assertEqual(frames[0].data, bytes.fromhex("FD 01 01 FF 01 FA 27 10"))
         self.assertEqual(frames[1].data, bytes.fromhex("FD 00 00 0E 10 00 00 6B"))
 

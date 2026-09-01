@@ -1,8 +1,4 @@
-"""阻止当前电机型号使用手册未确认支持的功能。
-
-这样可以在发送 CAN 报文前给出清楚的错误，避免把其他型号的命令误发给
-X57S。普通用户不需要直接修改这个文件。
-"""
+"""基于型号和固件的 ZDT 功能门控。"""
 
 from dataclasses import dataclass
 
@@ -52,7 +48,7 @@ X42S_Y42_ONLY_FEATURES = frozenset(
 
 @dataclass(frozen=True)
 class CapabilityProfile:
-    """记录某个电机型号和固件可以安全调用哪些功能。"""
+    """一个型号和固件组合的可用功能集合。"""
 
     model: str
     firmware: Firmware

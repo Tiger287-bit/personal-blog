@@ -5,7 +5,7 @@ import queue
 import threading
 import time
 
-from .backends import MotorBackend, SocketCANBackend
+from .backends import CanBackend, SocketCANBackend
 from .bus_base import BusKind, ZDTMotorBus
 from .commands import common
 from .config import ChecksumType, parse_checksum_type, validate_motor_id
@@ -18,9 +18,9 @@ from .errors import (
     ZDTTimeoutError,
     ZDTUnsupportedFeatureError,
 )
+from .messages import LogicalCommand
 from .protocols import (
-    LogicalCommand,
-    ZDTProtocol,
+    ZDTCanProtocol,
     parse_arbitration_id,
     reassemble_can_frames,
 )
@@ -80,7 +80,7 @@ class ZDTCanBus(ZDTMotorBus):
         @param interface     : 兼容旧代码，仅支持can或socketcan
         @param device        : 兼容旧代码的SocketCAN接口名，推荐改用endpoint
         @param checksum      : ZDT校验方式
-        @param backend       : 可选MotorBackend，单元测试可传FakeBackend
+        @param backend       : 可选CanBackend，单元测试可传FakeBackend
         @param default_timeout_s: 默认应答超时秒数
         @param event_queue_size: 异步事件队列最大容量
         @param trace_callback: 可选原始帧回调
@@ -116,8 +116,8 @@ class ZDTCanBus(ZDTMotorBus):
             endpoint = SocketCanEndpoint(interface=resolved_device or "can0")
         if backend is None:
             backend = SocketCANBackend(device=endpoint.interface)
-        if not isinstance(backend, MotorBackend):
-            raise TypeError("backend must implement MotorBackend")
+        if not isinstance(backend, CanBackend):
+            raise TypeError("backend must implement CanBackend")
         if (
             isinstance(backend, SocketCANBackend)
             and backend.device != endpoint.interface
@@ -130,7 +130,7 @@ class ZDTCanBus(ZDTMotorBus):
         self.backend = backend
         self.device = endpoint.interface
         self._checksum = parse_checksum_type(checksum)
-        self.protocol = ZDTProtocol(self.checksum)
+        self.protocol = ZDTCanProtocol(self.checksum)
         self._default_timeout_s = float(default_timeout_s)
         self.trace_callback = trace_callback
         self._pending = {}
@@ -256,9 +256,9 @@ class ZDTCanBus(ZDTMotorBus):
         self.backend.close()
         self._fail_all(ZDTBackendError("ZDT bus closed"))
 
-    def command_frames(self, address, command):
+    def encode_frames(self, address, command):
         """
-        @description         : 只编码命令，供测试和raw检查使用
+        @description         : 把ZDT逻辑命令编码成经典CAN扩展帧但不发送
         @param address       : 电机地址
         @param command       : LogicalCommand
         @return              : CanFrame元组

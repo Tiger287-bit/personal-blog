@@ -14,21 +14,6 @@ class RawMotorAPI:
         """
         self._motor = motor
 
-    def frames(self, function_code, payload=b"", *, expected_response_length=3):
-        """
-        @description         : 只编码原始逻辑命令而不发送
-        @param function_code : 功能码
-        @param payload       : 不含功能码和校验码的命令数据
-        @param expected_response_length: 期望逻辑应答总长度
-        @return              : CanFrame元组
-        """
-        command = build_raw(
-            function_code,
-            payload,
-            expected_response_length=expected_response_length,
-        )
-        return self._motor.bus.command_frames(self._motor.motor_id, command)
-
     def request(
         self,
         function_code,

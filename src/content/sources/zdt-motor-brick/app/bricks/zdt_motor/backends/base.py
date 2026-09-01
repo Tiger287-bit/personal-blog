@@ -1,4 +1,4 @@
-"""所有 ZDT 通信 Backend 的稳定抽象。"""
+"""经典 CAN 帧及 CAN Backend 的稳定抽象。"""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -27,13 +27,13 @@ class CanFrame:
             raise ValueError("classical CAN data must not exceed 8 bytes")
 
 
-class MotorBackend(ABC):
-    """ZDTMotor 与实际通信方式之间的统一接口。"""
+class CanBackend(ABC):
+    """只负责经典 CAN 帧搬运的 Backend 接口。"""
 
     @abstractmethod
     def open(self):
         """
-        @description         : 打开通信 Backend
+        @description         : 打开 CAN Backend
         @param               : 无参数
         @return              : 当前 Backend
         """
@@ -41,15 +41,15 @@ class MotorBackend(ABC):
     @abstractmethod
     def send(self, frame):
         """
-        @description         : 发送一个 Backend 帧
-        @param frame         : CanFrame 或未来 Backend 对应帧
+        @description         : 发送一个经典 CAN 帧
+        @param frame         : CanFrame实例
         @return              : 无返回值
         """
 
     @abstractmethod
     def receive(self, timeout_s):
         """
-        @description         : 等待并接收一个 Backend 帧
+        @description         : 等待并接收一个经典 CAN 帧
         @param timeout_s     : 最大等待秒数
         @return              : 收到的帧或None
         """
@@ -57,7 +57,7 @@ class MotorBackend(ABC):
     @abstractmethod
     def close(self):
         """
-        @description         : 关闭通信 Backend
+        @description         : 关闭 CAN Backend
         @param               : 无参数
         @return              : 无返回值
         """

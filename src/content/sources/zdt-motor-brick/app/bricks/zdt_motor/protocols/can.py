@@ -1,56 +1,15 @@
-"""把 ZDT 逻辑命令转换成真实 CAN 报文，并检查电机应答。
-
-普通用户不需要直接调用本模块。``ZDTMotor`` 和 ``ZDTBus`` 会自动完成
-CAN ID 生成、长报文分包、应答重组以及校验码检查。
-"""
-
-from dataclasses import dataclass
+"""ZDT 经典 CAN 扩展帧编码、分包、重组和校验。"""
 
 from ..backends.base import CanFrame
 from ..config import ChecksumType, parse_checksum_type, validate_motor_id, validate_int
 from ..errors import ZDTProtocolError
+from ..messages import LogicalCommand, ZDTResponse
 from .checksum import calculate_checksum
-
-
-@dataclass(frozen=True)
-class LogicalCommand:
-    """尚未转换成 CAN 帧的电机命令，仅供 Brick 内部传递。"""
-
-    function_code: int
-    payload: bytes = b""
-    expected_response_length: int = 3
-    description: str = ""
-
-    def __post_init__(self):
-        """
-        @description         : 校验并规范化逻辑命令
-        @param               : 无参数
-        @return              : 无返回值
-        """
-        validate_int("function_code", self.function_code, 0, 255)
-        object.__setattr__(self, "payload", bytes(self.payload))
-        validate_int(
-            "expected_response_length",
-            self.expected_response_length,
-            3,
-            255,
-        )
-
-
-@dataclass(frozen=True)
-class ZDTResponse:
-    """地址、长度和校验码都检查通过后的电机应答。"""
-
-    address: int
-    function_code: int
-    data: bytes
-    raw: bytes
-    timestamp: float
 
 
 def arbitration_id(address, packet=0):
     """
-    @description         : 根据电机地址和分包号生成ZDT扩展CAN ID
+    @description         : 按Addr左移8位或Packet生成29位扩展CAN ID
     @param address       : 电机地址，允许广播地址0
     @param packet        : 分包编号0至255
     @return              : CAN扩展标识符
@@ -62,7 +21,7 @@ def arbitration_id(address, packet=0):
 
 def parse_arbitration_id(can_id):
     """
-    @description         : 从收到的CAN ID中取出电机地址和分包号
+    @description         : 从ZDT扩展CAN ID解析电机地址和分包号
     @param can_id        : 29位CAN标识符
     @return              : address与packet二元组
     """
@@ -76,7 +35,7 @@ def parse_arbitration_id(can_id):
 
 def split_can_frames(address, logical_data):
     """
-    @description         : 把超过8字节的逻辑数据拆成多条经典CAN报文
+    @description         : 按手册规则分包并在后续包首字节重复功能码
     @param address       : 电机地址
     @param logical_data  : 功能码、数据和校验码，不含地址
     @return              : CanFrame元组
@@ -136,12 +95,12 @@ def reassemble_can_frames(frames, expected_length):
     return bytes(assembled)
 
 
-class ZDTProtocol:
-    """负责 ZDT 逻辑数据与经典 CAN 帧之间的转换。"""
+class ZDTCanProtocol:
+    """只负责 ZDT 逻辑数据与经典 CAN 扩展帧之间的转换。"""
 
     def __init__(self, checksum=ChecksumType.FIXED_6B):
         """
-        @description         : 保存协议校验方式
+        @description         : 保存ZDT CAN协议校验方式
         @param checksum      : fixed_6b、xor或crc8
         @return              : 无返回值
         """
@@ -162,7 +121,7 @@ class ZDTProtocol:
 
     def validate_response(self, address, logical_data, expected_function=None):
         """
-        @description         : 校验应答地址、功能码和校验码并创建结构化响应
+        @description         : 校验应答地址、功能码和校验码并创建结构化应答
         @param address       : 从CAN ID解析出的电机地址
         @param logical_data  : 功能码、返回数据和校验码
         @param expected_function: 可选的期望功能码

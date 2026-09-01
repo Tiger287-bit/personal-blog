@@ -1,22 +1,18 @@
-"""使用 python-can 连接 Linux 的 ``can0`` 接口。
-
-这个文件是 Brick 中唯一直接依赖 ``python-can`` 的模块。它只负责收发
-经典 CAN 扩展帧，不负责设置波特率，也不会自动启用系统接口。
-"""
+"""基于 python-can 的 Linux SocketCAN Backend。"""
 
 import socket
 
-from .base import CanFrame, MotorBackend
+from .base import CanBackend, CanFrame
 from ..errors import ZDTBackendError, ZDTConfigurationError
 
 
-class SocketCANBackend(MotorBackend):
-    """打开一个已经由用户配置好的 Linux SocketCAN 接口。"""
+class SocketCANBackend(CanBackend):
+    """只使用已经存在且已配置的 Linux SocketCAN 接口。"""
 
     def __init__(self, device="can0", *, receive_own_messages=False):
         """
-        @description         : 保存Linux CAN接口名称，但不修改它的状态或波特率
-        @param device        : Linux CAN接口名称，通常是can0
+        @description         : 保存 SocketCAN 接口名但不修改系统接口状态
+        @param device        : SocketCAN接口，例如can0
         @param receive_own_messages: 是否接收本进程发出的回环帧
         @return              : 无返回值
         """
@@ -28,7 +24,7 @@ class SocketCANBackend(MotorBackend):
 
     def open(self):
         """
-        @description         : 使用python-can打开已经存在的Linux CAN接口
+        @description         : 使用 python-can 打开已有 SocketCAN 接口
         @param               : 无参数
         @return              : 当前 SocketCANBackend
         """

@@ -1,12 +1,8 @@
-"""生成 ZDT X 固件使用的速度和位置命令。
-
-当 ``ZDTMotor`` 使用 ``firmware="x"`` 时，会自动调用本模块。
-X 固件的部分速度和角度参数使用 0.1 单位，不能套用 Emm 的报文格式。
-"""
+"""ZDT X 固件专属速度和梯形位置命令。"""
 
 from ..config import MotionMode, validate_int, validate_number
 from ..errors import ZDTConfigurationError
-from ..protocols.zdt import LogicalCommand
+from ..messages import LogicalCommand
 from .base import direction_and_magnitude, pack_u16, pack_u32, parse_motion_mode
 
 

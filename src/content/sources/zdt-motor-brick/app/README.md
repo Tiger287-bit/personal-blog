@@ -22,15 +22,17 @@ zdt-motor-demo/
 ├── bricks/zdt_motor/
 │   ├── README.md                  # Brick 使用说明
 │   ├── motor.py                   # 单电机 API
+│   ├── messages.py                # 逻辑命令和逻辑应答
 │   ├── bus.py                     # ZDT CAN 总线管理
-│   ├── bus_base.py                # 电机总线公共接口
+│   ├── bus_base.py                # ZDTMotorBus正式契约
 │   ├── endpoints.py               # SocketCAN接口配置
 │   ├── commands/                  # 命令参数编码
-│   ├── protocols/                 # CAN 报文生成和解析
-│   ├── backends/socketcan.py      # 打开 can0
+│   ├── protocols/can.py           # CAN报文生成和解析
+│   ├── backends/base.py           # CanFrame和CanBackend
+│   ├── backends/socketcan.py      # 使用python-can打开can0
 │   └── vendor/                    # 离线 Python 依赖安装包
 ├── scripts/                       # 开发板宿主系统辅助工具
-└── tests/                         # 开发阶段的自动检查
+└── tests/                         # 59项永久回归测试
 ```
 
 第一次阅读时，建议依次查看：
@@ -136,19 +138,29 @@ with ZDTCanBus(name="motor_can", endpoint=can_endpoint) as can_bus:
 `sudo ip link`。旧代码中的 `ZDTBus(device="can0")` 仍可运行，但新代码推荐使用
 含义更明确的 `ZDTCanBus` 和 `SocketCanEndpoint`。
 
-当前只实现 CAN。未来串口应使用单独的 `ZDTSerialBus` 和串口端点，不会把串口判断
-加入 `ZDTCanBus`。VENTUNO Q 的 D0/D1 是 MCU 引脚，未来需要通过 MCU/RouterBridge
-端点访问；它们不是 Linux 串口设备名。
+V1 只正式支持 VENTUNO Q 上已经验证的 Linux SocketCAN `can0`。当前没有实现 UART、
+TTL、RS485、Modbus RTU、D0/D1、Bridge UART、Bridge CAN 或 `can1` 自动发现。
+以后出现真实需求时，应新增对应的 Bus、Protocol、Backend 和 Endpoint，不在
+`ZDTCanBus` 中加入串口开关，也不重写 `ZDTMotor` 和命令层。
 
 ## VENTUNO Q 上的运行边界
 
 当前 CAN 路径是：
 
 ```text
-FDCAN1 → CANnectivity → gs_usb → Linux SocketCAN → can0
+VENTUNO Q CAN螺钉座
+  → FDCAN1
+  → 系统CANnectivity
+  → gs_usb
+  → Linux SocketCAN
+  → can0
+  → SocketCANBackend
+  → ZDTCanBus
+  → ZDTMotor
 ```
 
-因此 Sketch 只调用 `Bridge.begin()`，不再使用 Arduino CAN 库访问 FDCAN1。
+因此 Sketch 只调用 `Bridge.begin()`，不再使用 Arduino CAN 库访问 FDCAN1。这是 V1
+唯一正式支持并完成实机验证的 CAN 路径。
 
 当前 App Lab 的 `python/main.py` 在容器中运行，默认看不到宿主系统的 `can0`。需要访问真实 CAN 接口的代码，应通过 `scripts/run_host_python.sh` 在 VENTUNO Q 的 Linux 宿主系统中运行，同时复用 App 已安装的 Brick 和依赖。
 

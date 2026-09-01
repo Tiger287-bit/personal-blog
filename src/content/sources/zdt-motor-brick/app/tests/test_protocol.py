@@ -4,9 +4,9 @@ import unittest
 
 from zdt_motor import ZDTProtocolError
 from zdt_motor.backends import CanFrame
+from zdt_motor.messages import LogicalCommand
 from zdt_motor.protocols import (
-    LogicalCommand,
-    ZDTProtocol,
+    ZDTCanProtocol,
     arbitration_id,
     parse_arbitration_id,
     reassemble_can_frames,
@@ -33,7 +33,7 @@ class ProtocolTests(unittest.TestCase):
         @param               : 无参数
         @return              : 无返回值
         """
-        frames = ZDTProtocol().encode_command(1, LogicalCommand(0x36, b"", 7))
+        frames = ZDTCanProtocol().encode_command(1, LogicalCommand(0x36, b"", 7))
         self.assertEqual(len(frames), 1)
         self.assertEqual(frames[0].arbitration_id, 0x0100)
         self.assertTrue(frames[0].is_extended)
@@ -86,10 +86,10 @@ class ProtocolTests(unittest.TestCase):
         @param               : 无参数
         @return              : 无返回值
         """
-        response = ZDTProtocol().validate_response(1, bytes.fromhex("35 00 00 6B"))
+        response = ZDTCanProtocol().validate_response(1, bytes.fromhex("35 00 00 6B"))
         self.assertEqual(response.function_code, 0x35)
         with self.assertRaises(ZDTProtocolError):
-            ZDTProtocol().validate_response(1, bytes.fromhex("35 00 00 00"))
+            ZDTCanProtocol().validate_response(1, bytes.fromhex("35 00 00 00"))
 
     def test_xor_checksum_keeps_address_out_of_can_data(self):
         """
@@ -97,7 +97,7 @@ class ProtocolTests(unittest.TestCase):
         @param               : 无参数
         @return              : 无返回值
         """
-        frame = ZDTProtocol("xor").encode_command(
+        frame = ZDTCanProtocol("xor").encode_command(
             1,
             LogicalCommand(0x06, b"\x45", 3),
         )[0]

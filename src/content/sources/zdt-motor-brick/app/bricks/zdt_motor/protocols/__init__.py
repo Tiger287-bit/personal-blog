@@ -1,10 +1,8 @@
 """ZDT Motor Brick 协议层公共导出。"""
 
 from .checksum import CRC8_TABLE, calculate_checksum, crc8_checksum, xor_checksum
-from .zdt import (
-    LogicalCommand,
-    ZDTProtocol,
-    ZDTResponse,
+from .can import (
+    ZDTCanProtocol,
     arbitration_id,
     parse_arbitration_id,
     reassemble_can_frames,
@@ -13,9 +11,7 @@ from .zdt import (
 
 __all__ = [
     "CRC8_TABLE",
-    "LogicalCommand",
-    "ZDTProtocol",
-    "ZDTResponse",
+    "ZDTCanProtocol",
     "arbitration_id",
     "calculate_checksum",
     "crc8_checksum",

@@ -1,12 +1,9 @@
-"""提供普通 App 可以直接使用的单电机控制接口。
-
-一个 ``ZDTMotor`` 对象只表示一台电机。用户传入电机地址后，
-就可以用 RPM、角度等容易理解的单位读取或控制电机，无需手写 CAN 报文。
-"""
+"""面向工程单位的可复用单电机 ZDTMotor API。"""
 
 from dataclasses import replace
 
 from .capabilities import capabilities_for
+from .bus_base import ZDTMotorBus
 from .commands import common, emm, x
 from .compat import brick
 from .config import ChecksumType, Firmware, HomeMode, MotorConfig
@@ -114,11 +111,7 @@ def _decode_ack(response, *, allow_home_no_motion=False):
 
 @brick
 class ZDTMotor:
-    """一台 ZDT 第二代闭环电机。
-
-    如果总线上有多台电机，请为每个地址创建一个对象，并让它们共用同一个
-    ``ZDTBus``。例如，地址 1、2、3、4 对应四个 ``ZDTMotor`` 对象。
-    """
+    """一台 ZDT 第二代闭环电机；多个对象可共享同一个 ZDTBus。"""
 
     def __init__(
         self,
@@ -133,26 +126,19 @@ class ZDTMotor:
         timeout_s=None,
     ):
         """
-        @description         : 创建一台电机对象，并把它绑定到指定地址和共享CAN总线
-        @param bus           : 已创建的ZDTBus，多台电机应共用同一个对象
-        @param motor_id      : 这台电机的CAN地址，范围1至255
-        @param model         : 电机型号，当前确认使用X57S
-        @param firmware      : 电机菜单中的FWType，填写emm或x
-        @param checksum      : 校验方式，None表示使用ZDTBus的设置
-        @param microstep     : 电机当前细分，范围1至256
-        @param step_angle_degrees: 电机步距角，只能是0.9或1.8度
-        @param timeout_s     : 等待电机应答的秒数，None表示使用ZDTBus设置
+        @description         : 将单电机对象绑定到共享Bus和固定电机地址
+        @param bus           : 共享ZDTBus
+        @param motor_id      : 电机地址1至255
+        @param model         : V1确认型号X57S
+        @param firmware      : emm或x
+        @param checksum      : None表示沿用Bus校验方式
+        @param microstep     : 当前细分1至256
+        @param step_angle_degrees: 电机步距角0.9或1.8度
+        @param timeout_s     : None表示沿用Bus默认超时
         @return              : 无返回值
         """
-        required_bus_api = ("request", "checksum", "default_timeout_s")
-        missing_bus_api = [
-            name for name in required_bus_api if not hasattr(bus, name)
-        ]
-        if missing_bus_api:
-            raise TypeError(
-                "bus must implement the ZDT request interface; missing "
-                + ", ".join(missing_bus_api)
-            )
+        if not isinstance(bus, ZDTMotorBus):
+            raise TypeError("bus must implement ZDTMotorBus")
         resolved_checksum = bus.checksum if checksum is None else checksum
         resolved_timeout = bus.default_timeout_s if timeout_s is None else timeout_s
         self.bus = bus
@@ -212,7 +198,7 @@ class ZDTMotor:
 
     def enable(self, *, synchronized=False):
         """
-        @description         : 使能当前电机，使其进入可以接收运动命令的状态
+        @description         : 使能并锁定当前电机轴
         @param synchronized  : True缓存到同步触发，False立即执行
         @return              : 结构化命令状态
         """
@@ -221,7 +207,7 @@ class ZDTMotor:
 
     def disable(self, *, synchronized=False):
         """
-        @description         : 失能当前电机，电机轴通常可以自由转动
+        @description         : 失能当前电机并允许电机轴自由转动
         @param synchronized  : True缓存到同步触发，False立即执行
         @return              : 结构化命令状态
         """
@@ -230,7 +216,7 @@ class ZDTMotor:
 
     def stop(self, *, synchronized=False):
         """
-        @description         : 请求当前电机停止运动
+        @description         : 向当前电机发送立即停止命令
         @param synchronized  : True缓存到同步触发，False立即执行
         @return              : 结构化命令状态
         """
@@ -265,10 +251,10 @@ class ZDTMotor:
         synchronized=False,
     ):
         """
-        @description         : 使用RPM设置当前电机的目标速度
-        @param rpm           : 目标转速，可使用正负号表示方向
-        @param direction     : cw、ccw或None；None时从rpm正负号判断
-        @param acceleration  : Emm为0至255加速度档位，X为RPM/S
+        @description         : 按固件布局用RPM工程单位设置速度
+        @param rpm           : 目标RPM，可用符号表达方向
+        @param direction     : cw、ccw或None
+        @param acceleration  : Emm为0至255档，X为RPM/S
         @param synchronized  : True缓存到同步触发，False立即执行
         @return              : 结构化命令状态
         """
@@ -351,7 +337,7 @@ class ZDTMotor:
 
     def get_speed(self):
         """
-        @description         : 读取驱动器报告的实时转速，并转换为带方向的RPM
+        @description         : 读取实时转速并转换为带符号RPM
         @param               : 无参数
         @return              : 浮点RPM
         """
@@ -361,7 +347,7 @@ class ZDTMotor:
 
     def get_position(self):
         """
-        @description         : 读取驱动器报告的实时位置，并转换为带方向的角度
+        @description         : 读取实时位置并转换为带符号角度
         @param               : 无参数
         @return              : 浮点角度
         """
@@ -392,7 +378,7 @@ class ZDTMotor:
 
     def get_status(self):
         """
-        @description         : 读取电机状态，并转换为使能、到位和故障等布尔值
+        @description         : 读取并解析电机状态标志位
         @param               : 无参数
         @return              : 状态字节和布尔标志字典
         """

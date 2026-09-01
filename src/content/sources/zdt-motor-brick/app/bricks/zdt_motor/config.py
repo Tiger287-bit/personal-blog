@@ -1,4 +1,4 @@
-"""集中保存电机地址、固件、方向和校验方式等公共设置。"""
+"""ZDT Motor Brick 的公共配置和枚举。"""
 
 from dataclasses import dataclass
 from enum import Enum, IntEnum
@@ -7,7 +7,7 @@ from .errors import ZDTConfigurationError
 
 
 class Firmware(str, Enum):
-    """电机菜单中的 FWType；必须按实际值选择 Emm 或 X。"""
+    """ZDT 第二代闭环固件类型。"""
 
     EMM = "emm"
     X = "x"
@@ -49,7 +49,7 @@ class HomeMode(IntEnum):
 
 @dataclass(frozen=True)
 class MotorConfig:
-    """一台电机的地址、固件、细分、步距角和超时设置。"""
+    """单个 ZDTMotor 对象的协议与机械配置。"""
 
     model: str = "X57S"
     firmware: Firmware = Firmware.EMM

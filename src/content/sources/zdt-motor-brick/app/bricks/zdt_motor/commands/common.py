@@ -1,12 +1,8 @@
-"""生成 Emm 和 X 固件可以共用的电机命令。
-
-本模块只负责排列命令参数，不直接访问 ``can0``。普通用户应调用
-``ZDTMotor`` 的同名功能，而不是手动调用这里的 ``build_*`` 函数。
-"""
+"""Emm 和 X 固件格式一致的 ZDT 命令。"""
 
 from ..config import HomeMode, parse_direction, validate_int, validate_motor_id
 from ..errors import ZDTConfigurationError
-from ..protocols.zdt import LogicalCommand
+from ..messages import LogicalCommand
 from .base import pack_u16
 
 

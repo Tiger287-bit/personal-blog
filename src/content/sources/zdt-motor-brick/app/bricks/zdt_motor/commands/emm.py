@@ -1,12 +1,8 @@
-"""生成 ZDT Emm 固件使用的速度和位置命令。
-
-当 ``ZDTMotor`` 使用 ``firmware="emm"`` 时，会自动调用本模块。
-Emm 固件使用整数 RPM 和 0 至 255 的加速度档位。
-"""
+"""ZDT Emm 固件专属速度和位置命令。"""
 
 from ..config import MotionMode, validate_int, validate_number
 from ..errors import ZDTConfigurationError
-from ..protocols.zdt import LogicalCommand
+from ..messages import LogicalCommand
 from .base import (
     direction_and_magnitude,
     pack_u16,

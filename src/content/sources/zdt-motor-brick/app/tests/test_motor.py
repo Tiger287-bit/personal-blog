@@ -13,6 +13,7 @@ from zdt_motor import (
     ZDTTimeoutError,
     ZDTUnsupportedFeatureError,
 )
+from zdt_motor.commands import common
 from zdt_motor.protocols import calculate_checksum, parse_arbitration_id, split_can_frames
 
 
@@ -184,9 +185,9 @@ class MotorTests(unittest.TestCase):
         finally:
             bus.close()
 
-    def test_motor_accepts_future_bus_contract(self):
+    def test_motor_rejects_untyped_bus_contract(self):
         """
-        @description         : 校验未来UART或Pulse Bus无需继承当前SocketCAN Bus
+        @description         : 校验仅靠同名属性的方法对象不能冒充ZDTMotorBus
         @param               : 无参数
         @return              : 无返回值
         """
@@ -206,13 +207,13 @@ class MotorTests(unittest.TestCase):
                 """
                 raise AssertionError("construction test must not send")
 
-        motor = ZDTMotor(
-            bus=FutureBus(),
-            motor_id=1,
-            model="X57S",
-            firmware="emm",
-        )
-        self.assertEqual(motor.motor_id, 1)
+        with self.assertRaises(TypeError):
+            ZDTMotor(
+                bus=FutureBus(),
+                motor_id=1,
+                model="X57S",
+                firmware="emm",
+            )
 
     def test_set_motor_id_accepts_response_from_new_address(self):
         """
@@ -266,15 +267,16 @@ class MotorTests(unittest.TestCase):
         finally:
             bus.close()
 
-    def test_raw_api_calculates_id_and_checksum(self):
+    def test_can_bus_encodes_id_and_checksum(self):
         """
-        @description         : 校验raw接口仍由Brick计算扩展ID和校验码
+        @description         : 校验CAN总线编码接口计算扩展ID和校验码
         @param               : 无参数
         @return              : 无返回值
         """
         motor, bus, _ = self.create_motor({})
         try:
-            frame = motor.raw.frames(0x36, b"", expected_response_length=7)[0]
+            command = common.build_raw(0x36, b"", expected_response_length=7)
+            frame = bus.encode_frames(motor.motor_id, command)[0]
             self.assertEqual(frame.arbitration_id, 0x0100)
             self.assertEqual(frame.data, b"\x36\x6B")
         finally:

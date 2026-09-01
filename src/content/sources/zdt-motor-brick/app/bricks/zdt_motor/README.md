@@ -4,22 +4,27 @@
 closed-loop stepper motors. V1 implements Classical CAN through Linux
 SocketCAN and keeps motor commands independent from the transport.
 
-## VENTUNO Q CAN path
+## VENTUNO Q CAN 使用边界
 
 ```text
-Python ZDTMotor
-  -> Command Layer
-  -> ZDT Protocol Layer
-  -> SocketCANBackend (python-can)
-  -> Linux can0
-  -> gs_usb / CANnectivity
+VENTUNO Q 螺钉式 CAN 接口
   -> FDCAN1
-  -> ZDT motor
+  -> 系统 CANnectivity
+  -> gs_usb
+  -> Linux SocketCAN
+  -> can0
+  -> SocketCANBackend
+  -> ZDTCanBus
+  -> ZDTMotor
 ```
 
-The Sketch must not call `CAN.begin()`, `CAN.write()`, `CAN.available()`, or
-`CAN.read()`. On the current VENTUNO Q firmware, CANnectivity owns FDCAN1 and
-exposes it to Linux as `can0`.
+这是当前 V1 唯一正式支持并经过实机验证的通信路径。VENTUNO Q 系统固件已经通过
+CANnectivity 占用 FDCAN1，并把它作为 `gs_usb` 设备提供给 Linux `can0`。
+
+因此，同一个 App 的 Sketch 不得再次调用 `CAN.begin()`、`CAN.write()`、
+`CAN.available()` 或 `CAN.read()` 操作 FDCAN1。在当前 ArduinoCore-zephyr / loader
+环境中，电机返回帧会进入 CANnectivity 到 Linux `can0` 的路径，但不会同时进入
+Sketch 的 Arduino CAN 轮询接收队列。
 
 The Brick never runs `sudo ip link`, changes bitrate, or brings an interface
 up. System CAN setup stays outside the library.
@@ -29,8 +34,10 @@ up. System CAN setup stays outside the library.
 ```text
 ZDTMotor / RawMotorAPI
   commands/common.py, commands/emm.py, commands/x.py
-  protocols/zdt.py, protocols/checksum.py
-  MotorBackend
+  messages.py: LogicalCommand / ZDTResponse
+  ZDTCanBus
+  protocols/can.py: ZDTCanProtocol
+  CanBackend
   SocketCANBackend
 ```
 
@@ -102,7 +109,12 @@ print(can_bus.describe())
 - Configuration: `set_motor_id()`, `set_microstep()`,
   `set_current_limit()`, `set_direction()`
 - Capability: `supports(feature)`
-- Advanced diagnostics: `motor.raw.frames(...)`, `motor.raw.request(...)`
+- Raw logical command: `motor.raw.request(...)`
+- CAN frame inspection: `can_bus.encode_frames(motor_id, command)`
+
+`motor.raw` 只表示 ZDT 原始逻辑命令，不返回 `CanFrame`。需要检查实际 CAN 编码时，
+应显式使用 `ZDTCanBus.encode_frames()`；CAN arbitration ID、分包和经典 CAN 帧都属于
+CAN 层，而不是电机对象。
 
 ## Emm and X firmware
 
@@ -188,17 +200,26 @@ Brick 不会自动猜测、查询或修改电机的 `Response` 设置。
 Brick 当前不会自动读取这些菜单参数，也不会静默猜测被修改过的配置。配置不一致时，
 即使 CAN 通信正常，电机的实际速度或位置也可能与代码目标不同。
 
-## V1 limits and future buses
+## V1 范围与未来扩展原则
 
-V1 implements Linux SocketCAN. It defaults to `can0`, but another existing
-SocketCAN interface can be selected with
-`SocketCanEndpoint(interface="can1")`. TTL, Pulse, RS485, RS232, Modbus,
-DMX512, and CANopen are not implemented.
+V1 只正式支持 VENTUNO Q 上已经验证的 Linux SocketCAN `can0`。代码允许显式填写其他
+已经存在的 SocketCAN 接口名，但不会自动发现 `can1`，也不代表其他接口已经在 VENTUNO Q
+上验证。TTL、RS485、Modbus RTU、D0/D1 UART、Bridge UART、Bridge CAN 和其他 ZDT
+通信协议当前都没有实现。
 
-`ZDTCanBus` implements the common `ZDTMotorBus` contract. A future serial
-version should add a separate `ZDTSerialBus` and serial endpoint instead of
-adding serial switches to `ZDTCanBus`. `ZDTMotor`, commands, and result
-objects can then stay unchanged. On VENTUNO Q, MCU pins D0/D1 are not Linux
-device names: direct D0/D1 support should use an MCU/RouterBridge serial
-endpoint, while a Linux USB serial adapter should use a Linux serial-device
-endpoint.
+以后出现真实需求时，应为新的通信方式增加对应的 Bus、Protocol、Backend 和 Endpoint，
+而不是把串口开关加入 `ZDTCanBus`，也不应重写 `ZDTMotor`、`commands/common.py`、
+`commands/emm.py` 或 `commands/x.py`。V1 不为尚未使用的通信方式创建空类、空目录、
+Factory、Registry 或 TransportManager。
+
+当前冻结的依赖方向是：
+
+```text
+ZDTMotor
+  -> LogicalCommand
+  -> ZDTCanBus
+  -> ZDTCanProtocol
+  -> CanBackend
+  -> SocketCANBackend
+  -> Linux can0
+```
