@@ -67,13 +67,21 @@ class ZDTMotorBus(ABC):
         """
 
     @abstractmethod
-    def request(self, address, command, **kwargs):
+    def request(
+        self,
+        address,
+        command,
+        *,
+        timeout_s=None,
+        response_address=None,
+    ):
         """
-        @description         : 发送电机命令并等待应答
-        @param address       : 电机地址
-        @param command       : 电机逻辑命令
-        @param kwargs        : 各总线实现支持的可选参数
-        @return              : 解析后的电机应答
+        @description         : 发送逻辑命令并等待匹配的ZDT应答
+        @param address       : 发送目标电机地址
+        @param command       : LogicalCommand
+        @param timeout_s     : 本次请求超时时间，None表示使用Bus默认值
+        @param response_address: 允许应答出现的地址，可用于修改电机ID等场景
+        @return              : ZDTResponse
         """
 
     @abstractmethod

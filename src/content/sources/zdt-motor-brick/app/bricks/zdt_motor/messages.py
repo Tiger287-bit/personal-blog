@@ -32,7 +32,13 @@ class LogicalCommand:
 
 @dataclass(frozen=True)
 class ZDTResponse:
-    """经过通信协议校验后的 ZDT 逻辑应答。"""
+    """
+    已通过具体通信协议校验的 ZDT 逻辑应答。
+
+    raw 表示重组后的 ZDT 逻辑应答体，当前 CAN 实现中的内容为
+    Function + Data + Checksum。它不包含 CAN arbitration ID、CAN 分包号、
+    SocketCAN 元数据或其他通信方式的外层 framing。
+    """
 
     address: int
     function_code: int

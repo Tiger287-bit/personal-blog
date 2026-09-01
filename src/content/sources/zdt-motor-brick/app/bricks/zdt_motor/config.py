@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum, IntEnum
+import math
 
 from .errors import ZDTConfigurationError
 
@@ -72,8 +73,11 @@ class MotorConfig:
         validate_int("microstep", self.microstep, 1, 256)
         if self.step_angle_degrees not in (0.9, 1.8):
             raise ZDTConfigurationError("step_angle_degrees must be 0.9 or 1.8")
-        if self.timeout_s <= 0:
-            raise ZDTConfigurationError("timeout_s must be greater than zero")
+        object.__setattr__(
+            self,
+            "timeout_s",
+            validate_positive_number("timeout_s", self.timeout_s),
+        )
 
 
 def parse_firmware(value):
@@ -177,5 +181,24 @@ def validate_number(name, value, minimum, maximum):
     if normalized < minimum or normalized > maximum:
         raise ZDTConfigurationError(
             f"{name} must be in range {minimum}-{maximum}"
+        )
+    return normalized
+
+
+def validate_positive_number(name, value):
+    """
+    @description         : 校验有限且大于零的数值并转换为浮点数
+    @param name          : 参数名称
+    @param value         : 待校验数值
+    @return              : 合法浮点数
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ZDTConfigurationError(
+            f"{name} must be a finite positive number"
+        )
+    normalized = float(value)
+    if not math.isfinite(normalized) or normalized <= 0:
+        raise ZDTConfigurationError(
+            f"{name} must be a finite positive number"
         )
     return normalized

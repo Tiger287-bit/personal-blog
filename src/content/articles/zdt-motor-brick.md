@@ -21,6 +21,7 @@ capabilities:
   - "Emm / X 固件"
   - "异步完成事件"
   - "多电机同步启动"
+  - "CAN V1 稳定接口"
 sourceDir: "zdt-motor-brick"
 ---
 
@@ -51,6 +52,50 @@ sourceDir: "zdt-motor-brick"
 这个 Brick 需要 `python-can 4.6.1`。依赖安装包已经放进 App，启动 App 时会自动安装。因此开发板不需要访问 PyPI，也不需要手动执行 `pip install`。
 
 > PyPI 是 Python 软件包的下载网站。wheel 是已经准备好的安装包。初次使用时不需要操作它们。
+
+## CAN V1 稳定接口
+
+CAN V1 已经固定公开接口。以后即使 Brick 内部继续修复或优化，正常使用代码也不应因为
+内部文件调整而被迫重写。
+
+普通项目应优先使用下面这些公开对象：
+
+| 类型 | 公开名称 | 用途 |
+| --- | --- | --- |
+| 电机与总线 | `ZDTMotor`、`ZDTCanBus` | 创建电机对象和共享 CAN 总线 |
+| 总线契约 | `ZDTMotorBus` | 为以后新增其他通信总线保留统一电机接口 |
+| 接口配置 | `SocketCanEndpoint` | 指定 `can0` 等 Linux SocketCAN 接口 |
+| 电机配置 | `MotorConfig` | 保存型号、固件、地址、校验、细分和超时 |
+| 枚举 | `ChecksumType`、`Firmware`、`Direction`、`MotionMode`、`HomeMode` | 避免使用含义不清的数字或字符串 |
+| 兼容名称 | `ZDTBus` | 旧代码兼容别名；新代码使用 `ZDTCanBus` |
+
+公开错误类型包括 `ZDTError`、`ZDTBackendError`、`ZDTBusBusyError`、
+`ZDTCommandError`、`ZDTConfigurationError`、`ZDTFormatError`、
+`ZDTParameterError`、`ZDTProtocolError`、`ZDTTimeoutError` 和
+`ZDTUnsupportedFeatureError`。调用方可以捕获具体错误，而不需要分析英文错误文本。
+
+普通用户可以稳定调用 `enable()`、`disable()`、`stop()`、`set_speed()`、
+`move_relative()`、`move_absolute()`、`get_speed()`、`get_position()`、`get_status()`、
+`home()`、`bus.next_event()` 和 `bus.start_synchronized()`。
+
+`CanBackend`、`CanFrame`、`SocketCANBackend`、`LogicalCommand`、`ZDTResponse`、
+`ZDTCanProtocol` 以及 `commands/`、`protocols/`、`backends/` 下的内容属于高级或内部实现。
+它们可以用来阅读和调试，但普通 App 不应直接依赖其内部结构。
+
+如果以后需要实现另一种 ZDT 总线，必须遵守下面的请求签名：
+
+```python
+request(
+    address,
+    command,
+    *,
+    timeout_s=None,
+    response_address=None,
+)
+```
+
+`timeout_s` 表示本次请求的超时秒数；`response_address` 用于修改电机地址后，应答可能从
+旧地址或新地址返回的特殊场景。
 
 ## 使用前需要确认
 
@@ -95,32 +140,35 @@ app/
 ├── python/main.py                   # 最小使用示例
 ├── sketch/sketch.ino                # 保持 Linux can0 可用的最小 Sketch
 ├── bricks/zdt_motor/
-    ├── README.md                    # Brick 使用说明
-    ├── motor.py                     # 普通用户主要调用的电机 API
-    ├── messages.py                  # LogicalCommand与ZDTResponse
-    ├── bus.py                       # ZDTCanBus及多电机应答分发
-    ├── bus_base.py                  # ZDTMotorBus正式公共契约
-    ├── endpoints.py                 # can0等SocketCAN接口配置
-    ├── commands/                    # 把转速、角度转换成命令参数
-    ├── protocols/
-    │   ├── can.py                   # CAN ID、分包、重组和应答校验
-    │   └── checksum.py              # 0x6B、XOR与CRC8校验
-    ├── backends/
-    │   ├── base.py                  # CanFrame与CanBackend接口
-    │   └── socketcan.py             # 唯一直接使用python-can的文件
-    └── vendor/                      # 可离线安装的Python依赖
-        ├── python_can-4.6.1-py3-none-any.whl
-        ├── packaging-26.3-py3-none-any.whl
-        ├── typing_extensions-4.16.0-py3-none-any.whl
-        └── wrapt-1.17.3-...-aarch64.whl
+│   ├── README.md                    # Brick 使用说明与V1公开接口
+│   ├── motor.py                     # 普通用户主要调用的电机 API
+│   ├── config.py                    # 电机参数与统一数值校验
+│   ├── messages.py                  # LogicalCommand与ZDTResponse
+│   ├── bus.py                       # ZDTCanBus及多电机应答分发
+│   ├── bus_base.py                  # ZDTMotorBus正式公共契约
+│   ├── endpoints.py                 # can0等SocketCAN接口配置
+│   ├── commands/                    # 把转速、角度转换成命令参数
+│   ├── protocols/
+│   │   ├── can.py                   # CAN ID、分包、重组和应答校验
+│   │   └── checksum.py              # 0x6B、XOR与CRC8校验
+│   ├── backends/
+│   │   ├── base.py                  # CanFrame与CanBackend接口
+│   │   └── socketcan.py             # 唯一直接使用python-can的文件
+│   └── vendor/                      # 可离线安装的Python依赖
+│       ├── python_can-4.6.1-py3-none-any.whl
+│       ├── packaging-26.3-py3-none-any.whl
+│       ├── typing_extensions-4.16.0-py3-none-any.whl
+│       └── wrapt-1.17.3-...-aarch64.whl
 └── tests/
     ├── test_architecture.py         # V1架构边界永久测试
-    └── test_bus.py                  # 应答、事件、分包和同步启动测试
+    ├── test_bus.py                  # 应答、事件、分包和同步启动测试
+    └── test_v1_contract.py          # 公开接口、参数和raw语义测试
 ```
 
 `tests/` 和 `scripts/` 是验证工具，不影响 Brick 的正常使用。`test_architecture.py` 防止
 命令层依赖 CAN、Raw API 暴露 CAN 帧或 `python-can` 扩散到其他模块；`test_bus.py`
-检查普通应答、异步 `0x9F`、多电机应答分发、错误恢复和同步启动。
+检查普通应答、异步 `0x9F`、多电机应答分发、错误恢复和同步启动；
+`test_v1_contract.py` 固定 V1 公开请求参数、超时规则、接口名处理和逻辑应答语义。
 
 左侧目录包含完整 App 文件。Python、C++、YAML 和 Markdown 等文本文件可以直接阅读；
 `.whl` 是二进制安装包，点击后会显示“无法在网页中阅读”，但可以下载原文件。GitHub
@@ -342,6 +390,29 @@ Brick 不会自动发现或创建 `can1`。VENTUNO Q V1 正式验证的仍然只
 一个物理 CAN 总线只创建一个 `ZDTCanBus`，连接在这条线上的电机共用它。旧代码中的
 `ZDTBus(device="can0")` 仍然可以运行，但新代码推荐使用含义更清楚的类名和端点对象。
 
+### 接口名和超时参数规则
+
+接口名会自动去除首尾空格，例如 `"  can0  "` 会按 `"can0"` 使用。空字符串或只包含
+空格的接口名会在打开 CAN 之前抛出 `ZDTConfigurationError`。
+
+下面三个位置的超时参数使用同一套规则：
+
+- `ZDTCanBus(default_timeout_s=...)`；
+- `bus.request(..., timeout_s=...)`；
+- `MotorConfig(timeout_s=...)`。
+
+超时必须是有限且大于零的 `int` 或 `float`。`0.5` 和 `1` 合法；`True`、`False`、`0`、
+负数、字符串、`NaN` 和正负无穷都不合法，并统一抛出 `ZDTConfigurationError`。
+
+```python
+can_bus = ZDTCanBus(
+    endpoint=SocketCanEndpoint(interface="  can0  "),
+    default_timeout_s=0.5,
+)
+```
+
+这类错误会在真正访问 CAN 前被发现，因此不会因为错误配置而发送电机命令。
+
 ## 常用方法
 
 | 想做的事 | 方法 | 说明 |
@@ -378,6 +449,10 @@ response = motor.raw.request(
 
 `RawMotorAPI` 会构造 `LogicalCommand`，再交给当前 `ZDTMotorBus`。它不会计算 CAN ID，
 也不再提供 `motor.raw.frames()`。
+
+高级接口返回的 `ZDTResponse.raw` 是重组后的 ZDT 逻辑应答体，内容为
+`Function + Data + Checksum`。它不包含 CAN ID、分包序号或 SocketCAN 元数据。例如速度
+应答 `35 00 00 00 6B` 的 `raw` 就是这 5 个字节。
 
 只有在调试 CAN 编码时，才需要从 CAN 总线对象查看帧：
 
@@ -529,6 +604,29 @@ VENTUNO Q CAN螺钉座
 
 只有更换 Python 版本或处理器架构时，维护者才需要重新准备离线安装包。
 
+## 运行永久回归测试
+
+测试使用内存中的假 CAN Backend，不需要电机上电，也不会向 `can0` 发送报文：
+
+```bash
+cd /home/arduino/ArduinoApps/zdt-motor-demo
+
+PYTHONDONTWRITEBYTECODE=1 \
+PYTHONPATH=bricks \
+python3 -B -m unittest discover -s tests -v
+```
+
+全部通过时结尾应显示：
+
+```text
+Ran 68 tests
+
+OK
+```
+
+这 68 项测试同时覆盖命令编码、应答解析、分包重组、多电机分发、异步完成事件、错误恢复、
+公开 Bus 契约、超时边界、SocketCAN 接口名规范化和 `ZDTResponse.raw` 语义。
+
 ## 当前范围
 
 当前版本面向 ZDT X57S 第二代电机，正式支持 VENTUNO Q 的 Linux SocketCAN `can0`。
@@ -536,7 +634,7 @@ VENTUNO Q CAN螺钉座
 
 手册中只明确标注给其他型号的功能不会向 X57S 发送。TTL、RS485、CANopen 等其他通信方式也不在这个版本中。
 
-配套源码保存了 59 项永久回归测试，覆盖命令、协议、Backend、正式 Bus 契约、
+配套源码保存了 68 项永久回归测试，覆盖命令、协议、Backend、正式 Bus 契约、
 `0xF5/0x9A/0xFD` 完成事件、有界事件队列、溢出计数、多电机分发、错误恢复、同步启动和
-`SocketCanEndpoint` 规范化。VENTUNO Q 上的地址 1、2、3、4 四台 X57S 已完成共享总线
+超时及 `SocketCanEndpoint` 规范化。VENTUNO Q 上的地址 1、2、3、4 四台 X57S 已完成共享总线
 只读测试和逐台 `10 RPM / +30°` 运动测试，测试结束后全部停止并失能，CAN 错误计数保持为 0。

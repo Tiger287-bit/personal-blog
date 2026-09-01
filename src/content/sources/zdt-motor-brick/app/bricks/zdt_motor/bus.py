@@ -8,7 +8,12 @@ import time
 from .backends import CanBackend, SocketCANBackend
 from .bus_base import BusKind, ZDTMotorBus
 from .commands import common
-from .config import ChecksumType, parse_checksum_type, validate_motor_id
+from .config import (
+    ChecksumType,
+    parse_checksum_type,
+    validate_motor_id,
+    validate_positive_number,
+)
 from .endpoints import SocketCanEndpoint
 from .errors import (
     ZDTBackendError,
@@ -86,8 +91,10 @@ class ZDTCanBus(ZDTMotorBus):
         @param trace_callback: 可选原始帧回调
         @return              : 无返回值
         """
-        if default_timeout_s <= 0:
-            raise ValueError("default_timeout_s must be greater than zero")
+        normalized_default_timeout = validate_positive_number(
+            "default_timeout_s",
+            default_timeout_s,
+        )
         if (
             isinstance(event_queue_size, bool)
             or not isinstance(event_queue_size, int)
@@ -131,7 +138,7 @@ class ZDTCanBus(ZDTMotorBus):
         self.device = endpoint.interface
         self._checksum = parse_checksum_type(checksum)
         self.protocol = ZDTCanProtocol(self.checksum)
-        self._default_timeout_s = float(default_timeout_s)
+        self._default_timeout_s = normalized_default_timeout
         self.trace_callback = trace_callback
         self._pending = {}
         self._assemblies = {}
@@ -302,11 +309,10 @@ class ZDTCanBus(ZDTMotorBus):
                 raise ValueError("response_address collection must not be empty")
         else:
             reply_addresses = (validate_motor_id(response_address),)
-        effective_timeout = float(
-            self.default_timeout_s if timeout_s is None else timeout_s
+        effective_timeout = validate_positive_number(
+            "timeout_s",
+            self.default_timeout_s if timeout_s is None else timeout_s,
         )
-        if effective_timeout <= 0:
-            raise ValueError("timeout_s must be greater than zero")
         self.open()
         if self._receiver_error is not None:
             raise ZDTBackendError(f"receiver stopped: {self._receiver_error}")

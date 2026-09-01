@@ -3,6 +3,7 @@
 import socket
 
 from .base import CanBackend, CanFrame
+from ..config import validate_positive_number
 from ..errors import ZDTBackendError, ZDTConfigurationError
 
 
@@ -16,9 +17,12 @@ class SocketCANBackend(CanBackend):
         @param receive_own_messages: 是否接收本进程发出的回环帧
         @return              : 无返回值
         """
-        if not device or not isinstance(device, str):
+        if not isinstance(device, str):
             raise ZDTConfigurationError("device must be a non-empty string")
-        self.device = device
+        normalized_device = device.strip()
+        if not normalized_device:
+            raise ZDTConfigurationError("device must be a non-empty string")
+        self.device = normalized_device
         self.receive_own_messages = bool(receive_own_messages)
         self._bus = None
 
@@ -86,10 +90,9 @@ class SocketCANBackend(CanBackend):
         @param timeout_s     : 最大等待秒数
         @return              : CanFrame或None
         """
-        if timeout_s < 0:
-            raise ZDTConfigurationError("timeout_s must not be negative")
+        normalized_timeout = validate_positive_number("timeout_s", timeout_s)
         try:
-            message = self._require_bus().recv(timeout=float(timeout_s))
+            message = self._require_bus().recv(timeout=normalized_timeout)
         except Exception as error:
             if isinstance(error, ZDTBackendError):
                 raise

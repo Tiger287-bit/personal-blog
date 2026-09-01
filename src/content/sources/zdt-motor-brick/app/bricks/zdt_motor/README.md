@@ -44,6 +44,56 @@ ZDTMotor / RawMotorAPI
 `ZDTMotor` does not import or call `python-can`. Only
 `backends/socketcan.py` knows how SocketCAN is implemented.
 
+## V1 Public API
+
+以下名称属于 CAN V1 稳定公共 API，V1 冻结后不会因为内部重构轻易改名或删除：
+
+```text
+ZDTMotor
+ZDTCanBus
+ZDTBus
+ZDTMotorBus
+SocketCanEndpoint
+
+ChecksumType
+Firmware
+Direction
+MotionMode
+HomeMode
+MotorConfig
+
+ZDTError
+ZDTBackendError
+ZDTBusBusyError
+ZDTCommandError
+ZDTConfigurationError
+ZDTFormatError
+ZDTParameterError
+ZDTProtocolError
+ZDTTimeoutError
+ZDTUnsupportedFeatureError
+```
+
+普通用户可以稳定使用 `motor.enable()`、`disable()`、`stop()`、`set_speed()`、
+`move_relative()`、`move_absolute()`、`get_speed()`、`get_position()`、`get_status()`、
+`home()`，以及 `bus.next_event()` 和 `bus.start_synchronized()`。
+
+以下名称属于高级或内部实现 API：
+
+```text
+CanBackend
+CanFrame
+SocketCANBackend
+LogicalCommand
+ZDTResponse
+ZDTCanProtocol
+commands/*
+protocols/*
+backends/*
+```
+
+内部实现可以继续修正缺陷，但不能破坏上面的稳定公共 API。
+
 ## Basic use: one motor on can0
 
 ```python
