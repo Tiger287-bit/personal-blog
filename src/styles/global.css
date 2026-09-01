@@ -176,6 +176,16 @@ pre > code {
 	min-width: max-content;
 }
 
+.astro-code span {
+	font-style: inherit;
+	font-weight: inherit;
+}
+
+.astro-code ::selection {
+	color: #fff;
+	background: rgba(242, 169, 184, 0.34);
+}
+
 blockquote {
 	position: relative;
 	margin: 2rem 0;

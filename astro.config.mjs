@@ -8,6 +8,11 @@ import { defineConfig, fontProviders } from 'astro/config';
 export default defineConfig({
 	site: 'https://personal-blog-183.pages.dev',
 	integrations: [mdx(), sitemap()],
+	markdown: {
+		shikiConfig: {
+			theme: 'catppuccin-mocha',
+		},
+	},
 	fonts: [
 		{
 			provider: fontProviders.local(),

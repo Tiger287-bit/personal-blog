@@ -1,0 +1,6 @@
+name: ZDT Motor Demo
+description: Safe read-only demo and reusable ZDT second-generation motor Brick with a SocketCAN backend.
+icon: ⚙️
+ports: []
+bricks:
+  - zdt_motor

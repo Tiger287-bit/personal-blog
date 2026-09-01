@@ -48,7 +48,10 @@ const { articleSlug, section, rows, activePath } = Astro.props;
 					</button>
 				) : (
 					<a
-						class:list={{ active: activePath === row.path }}
+						class:list={{
+							active: activePath === row.path,
+							binary: row.file && !row.file.previewable,
+						}}
 						href={getArticleSourceHref(section, articleSlug, row.path)}
 						title={row.path}
 					>
@@ -264,6 +267,12 @@ const { articleSlug, section, rows, activePath } = Astro.props;
 		border: 1px solid rgba(102, 191, 174, 0.72);
 		border-radius: 1px 3px 2px 2px;
 		box-shadow: inset -0.14rem 0.14rem 0 var(--accent-soft);
+	}
+
+	a.binary .file-mark {
+		background: rgba(239, 236, 250, 0.92);
+		border-color: rgba(139, 124, 197, 0.78);
+		box-shadow: inset -0.14rem 0.14rem 0 rgba(139, 124, 197, 0.2);
 	}
 
 	.file-name {

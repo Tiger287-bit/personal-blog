@@ -1,0 +1,8 @@
+id: zdt_motor
+name: ZDT Motor
+description: Reusable layered API for ZDT second-generation closed-loop stepper motors with a SocketCAN backend.
+category: miscellaneous
+supported_boards:
+  - ventunoq
+ports: []
+variables: []

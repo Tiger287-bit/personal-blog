@@ -3,8 +3,11 @@ export interface ArticleSourceFile {
 	name: string;
 	group: string;
 	language: string;
+	highlighterLanguage: string;
 	content: string;
 	lineCount: number;
+	previewable: boolean;
+	downloadUrl: string;
 }
 
 export type ArticleSourceLink = Omit<ArticleSourceFile, 'content'>;
@@ -33,13 +36,28 @@ interface MutableSourceFile {
 
 type MutableSourceNode = MutableSourceDirectory | MutableSourceFile;
 
-const sourceModules = import.meta.glob<string>('./content/sources/**/*', {
+const sourceTextModules = import.meta.glob<string>([
+	'./content/sources/**/*.{cfg,cpp,h,ino,js,json,md,py,sh,txt,xml,yaml,yml}',
+	'./content/sources/**/.gitignore',
+], {
 	query: '?raw',
 	import: 'default',
 	eager: true,
+	exhaustive: true,
+});
+
+const sourceAssetModules = import.meta.glob<string>([
+	'./content/sources/**/*',
+	'./content/sources/**/.gitignore',
+], {
+	query: '?url',
+	import: 'default',
+	eager: true,
+	exhaustive: true,
 });
 
 const languageByExtension: Record<string, string> = {
+	cfg: 'Config',
 	cpp: 'C++',
 	h: 'C++ Header',
 	ino: 'Arduino',
@@ -52,41 +70,79 @@ const languageByExtension: Record<string, string> = {
 	xml: 'XML',
 	yaml: 'YAML',
 	yml: 'YAML',
+	gitignore: 'Git Ignore',
+	whl: 'Python Wheel',
+};
+
+const highlighterLanguageByExtension: Record<string, string> = {
+	cfg: 'ini',
+	cpp: 'cpp',
+	h: 'cpp',
+	ino: 'cpp',
+	js: 'javascript',
+	json: 'json',
+	md: 'markdown',
+	py: 'python',
+	sh: 'bash',
+	txt: 'text',
+	xml: 'xml',
+	yaml: 'yaml',
+	yml: 'yaml',
+	gitignore: 'text',
 };
 
 /*
- * @description         : 根据扩展名返回源码阅读页显示的语言名称
+ * @description         : 根据扩展名和可读状态返回源码阅读页显示的文件类型
  * @param path          : 源码文件相对路径
- * @return              : 语言名称，未知扩展名返回Text
+ * @param previewable   : 是否可以作为文本读取
+ * @return              : 文本语言或二进制文件类型名称
  */
-function getLanguage(path: string): string {
+function getLanguage(path: string, previewable: boolean): string {
 	const extension = path.split('.').pop()?.toLowerCase() ?? '';
-	return languageByExtension[extension] ?? 'Text';
+	return languageByExtension[extension] ?? (previewable ? 'Text' : 'Binary');
 }
 
 /*
- * @description         : 读取指定文章源码目录中的全部文本文件
+ * @description         : 根据源码文件扩展名返回Shiki使用的语言ID
+ * @param path          : 源码文件相对路径
+ * @return              : Shiki语言ID，未知扩展名返回text
+ */
+function getHighlighterLanguage(path: string): string {
+	const extension = path.split('.').pop()?.toLowerCase() ?? '';
+	return highlighterLanguageByExtension[extension] ?? 'text';
+}
+
+/*
+ * @description         : 收集指定文章源码目录中的全部文件并标记是否可以预览
  * @param sourceDir     : src/content/sources下的文章源码目录名
- * @return              : 按相对路径排序的源码文件列表
+ * @return              : 包含文本内容或二进制下载地址的文件列表
  */
 export function getArticleSourceFiles(sourceDir?: string): ArticleSourceFile[] {
 	if (!sourceDir) return [];
 
 	const prefix = `./content/sources/${sourceDir}/`;
-	return Object.entries(sourceModules)
+	return Object.entries(sourceAssetModules)
 		.filter(([modulePath]) => modulePath.startsWith(prefix))
-		.map(([modulePath, content]) => {
+		.map(([modulePath, downloadUrl]) => {
 			const path = modulePath.slice(prefix.length);
 			const segments = path.split('/');
-			const normalizedContent = content.replace(/\r\n/g, '\n');
+			const sourceText = sourceTextModules[modulePath];
+			const previewable = typeof sourceText === 'string';
+			const normalizedContent = previewable ? sourceText.replace(/\r\n/g, '\n') : '';
+			const lineCount = normalizedContent === ''
+				? 0
+				: normalizedContent.split('\n').length - (normalizedContent.endsWith('\n') ? 1 : 0);
 
 			return {
 				path,
 				name: segments.at(-1) ?? path,
 				group: segments.length > 1 ? segments[0] : 'root',
-				language: getLanguage(path),
+				language: getLanguage(path, previewable),
+				highlighterLanguage: getHighlighterLanguage(path),
 				content: normalizedContent,
-				lineCount: normalizedContent === '' ? 0 : normalizedContent.split('\n').length,
+				lineCount,
+				previewable,
+				downloadUrl,
 			};
 		})
 		.sort((left, right) => left.path.localeCompare(right.path, 'en'));

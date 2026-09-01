@@ -1,0 +1,204 @@
+<script>
+	const RESET_DELAY_MS = 1800;
+
+	/*
+	 * @description         : 使用剪贴板API或兼容回退方案复制纯文本
+	 * @param text          : 需要写入剪贴板的代码文本
+	 * @return              : 复制完成后的Promise
+	 */
+	async function writeClipboardText(text: string): Promise<void> {
+		if (navigator.clipboard?.writeText && window.isSecureContext) {
+			await navigator.clipboard.writeText(text);
+			return;
+		}
+
+		const textarea = document.createElement('textarea');
+		textarea.value = text;
+		textarea.setAttribute('readonly', '');
+		textarea.style.position = 'fixed';
+		textarea.style.opacity = '0';
+		document.body.append(textarea);
+		textarea.select();
+		const copied = document.execCommand('copy');
+		textarea.remove();
+		if (!copied) throw new Error('copy command was rejected');
+	}
+
+	/*
+	 * @description         : 更新复制按钮的视觉状态和无障碍标签
+	 * @param button        : 当前代码框的复制按钮
+	 * @param state         : idle、success或error状态
+	 * @return              : 无返回值
+	 */
+	function setButtonState(
+		button: HTMLButtonElement,
+		state: 'idle' | 'success' | 'error',
+	): void {
+		const label = button.querySelector<HTMLElement>('[data-copy-label]');
+		button.dataset.state = state;
+		if (state === 'success') {
+			if (label) label.textContent = '已复制';
+			button.setAttribute('aria-label', '代码已复制');
+			return;
+		}
+		if (state === 'error') {
+			if (label) label.textContent = '复制失败';
+			button.setAttribute('aria-label', '复制失败，请手动选择代码');
+			return;
+		}
+		if (label) label.textContent = '复制';
+		button.setAttribute('aria-label', '复制代码');
+	}
+
+	/*
+	 * @description         : 为一个正文代码块创建固定在右上角的复制按钮
+	 * @param codeBlock     : Markdown渲染生成的pre元素
+	 * @return              : 无返回值
+	 */
+	function attachCopyButton(codeBlock: HTMLPreElement): void {
+		if (codeBlock.closest('[data-article-code-frame]')) return;
+		const code = codeBlock.querySelector('code');
+		if (!code || !codeBlock.parentNode) return;
+
+		const frame = document.createElement('div');
+		frame.className = 'article-code-frame';
+		frame.dataset.articleCodeFrame = '';
+		codeBlock.parentNode.insertBefore(frame, codeBlock);
+		frame.append(codeBlock);
+
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = 'article-code-copy';
+		button.innerHTML = `
+			<svg viewBox="0 0 16 16" aria-hidden="true">
+				<path d="M5.25 2.25h6.5a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2h-6.5a2 2 0 0 1-2-2v-6.5a2 2 0 0 1 2-2Z"></path>
+				<path d="M10.75 13.75v.25a1.75 1.75 0 0 1-1.75 1.75H2A1.75 1.75 0 0 1 .25 14V7A1.75 1.75 0 0 1 2 5.25h.25"></path>
+			</svg>
+			<span data-copy-label>复制</span>
+		`;
+		setButtonState(button, 'idle');
+		frame.append(button);
+
+		button.addEventListener('click', async () => {
+			button.disabled = true;
+			try {
+				await writeClipboardText(code.textContent ?? '');
+				setButtonState(button, 'success');
+			} catch {
+				setButtonState(button, 'error');
+			} finally {
+				window.setTimeout(() => {
+					setButtonState(button, 'idle');
+					button.disabled = false;
+				}, RESET_DELAY_MS);
+			}
+		});
+	}
+
+	/*
+	 * @description         : 扫描文章正文并为全部代码块启用一键复制
+	 * @param               : 无参数
+	 * @return              : 无返回值
+	 */
+	function initializeArticleCodeCopy(): void {
+		document.querySelectorAll<HTMLPreElement>('.prose pre').forEach(attachCopyButton);
+	}
+
+	initializeArticleCodeCopy();
+</script>
+
+<style is:global>
+	.article-code-frame {
+		position: relative;
+		min-width: 0;
+		margin: 2rem 0;
+	}
+
+	.article-code-frame > pre {
+		margin: 0;
+	}
+
+	.article-code-frame > pre::after {
+		display: none;
+	}
+
+	.article-code-copy {
+		position: absolute;
+		top: 0.62rem;
+		right: 0.72rem;
+		z-index: 2;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.34rem;
+		height: 1.8rem;
+		padding: 0 0.62rem;
+		color: #c7e7e1;
+		font-family: var(--font-mono);
+		font-size: 0.61rem;
+		font-weight: 700;
+		letter-spacing: 0.03em;
+		cursor: pointer;
+		background: rgba(24, 32, 51, 0.88);
+		border: 1px solid rgba(169, 220, 210, 0.34);
+		border-radius: 6px;
+		box-shadow: 0 3px 10px rgba(9, 15, 28, 0.22);
+		transition:
+			color 0.16s ease,
+			background-color 0.16s ease,
+			border-color 0.16s ease,
+			transform 0.16s ease;
+	}
+
+	.article-code-copy svg {
+		width: 0.78rem;
+		height: 0.78rem;
+		fill: none;
+		stroke: currentColor;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		stroke-width: 1.25;
+	}
+
+	.article-code-copy:hover {
+		color: #effbf8;
+		background: rgba(58, 91, 91, 0.94);
+		border-color: rgba(169, 220, 210, 0.7);
+		transform: translateY(-1px);
+	}
+
+	.article-code-copy:focus-visible {
+		outline: 2px solid #a9dcd2;
+		outline-offset: 2px;
+	}
+
+	.article-code-copy:disabled {
+		cursor: default;
+	}
+
+	.article-code-copy[data-state='success'] {
+		color: #eafff9;
+		background: rgba(45, 117, 99, 0.94);
+		border-color: rgba(151, 231, 209, 0.72);
+	}
+
+	.article-code-copy[data-state='error'] {
+		color: #fff1f4;
+		background: rgba(142, 65, 83, 0.94);
+		border-color: rgba(242, 169, 184, 0.76);
+	}
+
+	@media (max-width: 620px) {
+		.article-code-copy {
+			top: 0.55rem;
+			right: 0.55rem;
+			height: 1.7rem;
+			padding: 0 0.52rem;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.article-code-copy {
+			transition: none;
+		}
+	}
+</style>

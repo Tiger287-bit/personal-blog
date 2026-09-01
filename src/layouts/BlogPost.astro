@@ -1,6 +1,7 @@
 ---
 import { Image } from 'astro:assets';
 import type { CollectionEntry } from 'astro:content';
+import ArticleCodeCopy from '../components/ArticleCodeCopy.astro';
 import BaseHead from '../components/BaseHead.astro';
 import FishMascot from '../components/FishMascot.astro';
 import Footer from '../components/Footer.astro';
@@ -89,6 +90,7 @@ const sectionLabel = category ?? '关于本站';
 				</div>
 			</article>
 		</main>
+		<ArticleCodeCopy />
 		<Footer />
 	</body>
 </html>
