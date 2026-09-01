@@ -62,8 +62,24 @@ CAN 总线，而且连接的是 `can0`”，以后增加串口时也不需要在
 6. 代码中的 `checksum` 与电机菜单里的 `Checksum` 一致。
 7. 代码中的 `microstep` 与电机菜单里的 `MStep` 一致。
 8. `step_angle_degrees` 与电机菜单里的 `MotType` 一致，只能填写实际使用的 `0.9` 或 `1.8`。
+9. 电机菜单里的 `Response` 使用 `Receive`，或者在需要完成事件时使用 `Both`。
 
 当前项目使用的 X57S 电机地址为 `1、2、3、4`，固件类型为 `FW_Emm`，所以代码中使用 `firmware="emm"`。
+
+### Response 应答方式
+
+`Response` 只影响控制动作命令。当前 Brick 的高层控制方法会先等待即时确认，因此不同设置不能混用：
+
+| 设置 | 当前 Brick 中的行为 |
+| --- | --- |
+| `Receive` | 适用；控制命令立即返回确认，但不会产生动作完成 `0x9F` |
+| `Both` | 推荐用于需要完成通知的场景；先返回确认，动作完成后再产生 `0x9F` |
+| `Reached` | 不支持；只返回完成事件，当前 `request()` 可能超时 |
+| `None` | 不支持；没有控制命令确认，当前 `request()` 会超时 |
+| `Other` | 不推荐；位置命令可能已经执行，但 Python 请求仍然超时 |
+
+Brick 不会自动查询、猜测或修改 `Response`。本项目实机测试使用 `Receive`，所以通过
+`get_status()` 轮询到位状态，而不是等待 `next_event()`。
 
 Brick 不会自动读取或猜测电机菜单参数。CAN 通信正常但参数不一致时，实际速度或位置仍可能不正确。Emm 的命令速度缩放和 X 的命令位置角度缩放应保持手册默认设置；如果修改过这些选项，需要先确认新的换算规则。
 
@@ -181,6 +197,46 @@ PASS: read-only motor communication and decoding succeeded
 当前验证环境中，地址 1～4 均正确返回固件版本 `2.0.0` 和硬件类型 `57`。四个对象共用一个 `ZDTCanBus` 连续读取 10 轮，共 40 次请求全部成功；接收线程没有异常，测试后 CAN 的发送错误、接收错误、丢帧和 bus-off 均为 0。
 
 这些结果只验证通信与只读解析，没有让电机运动。
+
+## 架空后的低速运动验证
+
+运动测试前必须架空底盘，保证轮子可以自由转动，清理周围线缆，并准备电源开关或物理急停。
+下面的测试会让一台电机以 `10 RPM` 相对转动 `+30°`，随后停止并失能：
+
+```bash
+cd /home/arduino/ArduinoApps/zdt-motor-demo
+
+scripts/run_host_python.sh scripts/motor_motion_test.py \
+  --device can0 \
+  --id 1 \
+  --firmware emm \
+  --model X57S \
+  --checksum fixed_6b \
+  --timeout 0.5 \
+  --rpm 10 \
+  --degrees 30 \
+  --acceleration 10 \
+  --wait-timeout 5 \
+  --unsafe-motion
+```
+
+`--unsafe-motion` 是明确的运动确认开关。没有它时脚本会拒绝执行。脚本的固定安全顺序是：
+
+```text
+使能 → 相对运动 → 轮询到位 → 停止 → 读取最终状态 → 失能
+```
+
+测试其他电机时，只把 `--id 1` 依次改成 `2`、`3`、`4`。当前实机结果如下：
+
+| 电机地址 | 初始位置 | 最终位置 | 位置变化 | 最终速度 | 最终状态 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1 | 0.016° | 30.372° | +30.355° | 0 RPM | 已到位、已失能 |
+| 2 | 0.005° | 30.493° | +30.487° | 0 RPM | 已到位、已失能 |
+| 3 | -0.071° | 30.547° | +30.619° | 0 RPM | 已到位、已失能 |
+| 4 | 0.027° | 30.613° | +30.586° | 0 RPM | 已到位、已失能 |
+
+四台电机均未触发堵转、限位、掉电、过流或过温。测试结束后 `can0` 仍为
+`ERROR-ACTIVE`，发送错误、接收错误、丢帧和 bus-off 均为 0。
 
 ## 创建一台电机
 
@@ -313,11 +369,34 @@ can_bus.start_synchronized()
 
 Brick 会把两者分开处理：普通状态用于完成当前请求，`0x9F` 放入异步事件队列。这样上一条命令的完成通知不会被误认为下一条同功能命令的应答。
 
+第二代 V1.0.5 手册明确列出的 CAN 完成事件是：
+
+| 功能码 | 完成事件 |
+| --- | --- |
+| `0xF5` | X 固件力矩模式夹爪夹紧完成 |
+| `0xFD` | 位置运动到位 |
+| `0x9A` | 回零完成 |
+
+只有这些功能码携带单字节 `0x9F` 时才按完成事件处理。读取命令的数据恰好等于
+`0x9F` 时仍然属于普通读取响应，例如 `0x3A 0x9F` 不会进入事件队列。
+
 ```python
 event = can_bus.next_event(timeout_s=0.5)
 if event is not None:
     print(event.address, event.function_code, event.data.hex())
 ```
+
+事件队列默认最多保存 256 条，可以在创建总线时调整：
+
+```python
+can_bus = ZDTCanBus(
+    endpoint=can_endpoint,
+    event_queue_size=256,
+)
+```
+
+队列满时会丢弃最旧事件并保留最新事件，避免机器人长期运行时无限占用内存。累计丢弃
+数量可通过 `can_bus.dropped_event_count` 读取；同一个总线对象重新 `open()` 不会清零该值。
 
 ## 为什么要填写 firmware
 
@@ -350,7 +429,9 @@ SocketCANBackend
 SocketCanEndpoint → Linux can0
 ```
 
-`ZDTCanBus` 实现 `ZDTMotorBus` 规定的公共接口。以后增加串口时，应新建独立的
+`ZDTCanBus` 实现 `ZDTMotorBus` 规定的公共接口，包括总线种类、端点、校验方式、
+默认超时、打开、关闭、请求和诊断信息。这样任何声称实现 `ZDTMotorBus` 的对象都具备
+`ZDTMotor` 真正需要的完整能力。以后增加串口时，应新建独立的
 `ZDTSerialBus` 和串口端点，而不是在 `ZDTCanBus` 中加入串口开关。这样
 `ZDTMotor`、命令对象和返回结果可以继续复用。
 
@@ -400,4 +481,7 @@ FDCAN1 → CANnectivity → gs_usb → Linux SocketCAN → can0
 
 手册中只明确标注给其他型号的功能不会向 X57S 发送。TTL、RS485、CANopen 等其他通信方式也不在这个版本中。
 
-当前源码已通过 47 项自动测试，并在 VENTUNO Q 上完成地址 1、2、3、4 四台 X57S 电机的只读 CAN 实机验证。同步启动帧、异步 `0x9F` 分发、显式 CAN 端点和旧 `ZDTBus` 兼容性已经由自动测试覆盖；真实运动测试应在车轮架空并准备物理急停后单独进行。
+当前源码已通过 47 项长期回归测试；本轮稳定化还通过了 10 项不写入项目的专项验收，
+覆盖完整总线契约、`0xF5/0x9A` 完成事件、有界队列、溢出计数、字符串正规化和旧
+`ZDTBus` 兼容性。VENTUNO Q 上的地址 1、2、3、4 四台 X57S 已完成共享总线只读测试
+和逐台 `10 RPM / +30°` 运动测试，测试结束后全部停止并失能，CAN 错误计数保持为 0。

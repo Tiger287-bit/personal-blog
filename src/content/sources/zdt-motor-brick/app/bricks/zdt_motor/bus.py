@@ -27,7 +27,8 @@ from .protocols import (
 
 
 ASYNC_COMPLETION_STATUS = 0x9F
-ASYNC_COMPLETION_FUNCTIONS = frozenset({0x9A, 0xFD})
+ASYNC_COMPLETION_FUNCTIONS = frozenset({0xF5, 0x9A, 0xFD})
+DEFAULT_EVENT_QUEUE_SIZE = 256
 
 
 @dataclass
@@ -69,6 +70,7 @@ class ZDTCanBus(ZDTMotorBus):
         checksum=ChecksumType.FIXED_6B,
         backend=None,
         default_timeout_s=0.5,
+        event_queue_size=DEFAULT_EVENT_QUEUE_SIZE,
         trace_callback=None,
     ):
         """
@@ -80,11 +82,20 @@ class ZDTCanBus(ZDTMotorBus):
         @param checksum      : ZDT校验方式
         @param backend       : 可选MotorBackend，单元测试可传FakeBackend
         @param default_timeout_s: 默认应答超时秒数
+        @param event_queue_size: 异步事件队列最大容量
         @param trace_callback: 可选原始帧回调
         @return              : 无返回值
         """
         if default_timeout_s <= 0:
             raise ValueError("default_timeout_s must be greater than zero")
+        if (
+            isinstance(event_queue_size, bool)
+            or not isinstance(event_queue_size, int)
+            or event_queue_size <= 0
+        ):
+            raise ZDTConfigurationError(
+                "event_queue_size must be a positive integer"
+            )
         if not isinstance(name, str) or not name.strip():
             raise ZDTConfigurationError("CAN bus name must not be empty")
         normalized_interface = str(interface).lower()
@@ -118,19 +129,47 @@ class ZDTCanBus(ZDTMotorBus):
         self._endpoint = endpoint
         self.backend = backend
         self.device = endpoint.interface
-        self.checksum = parse_checksum_type(checksum)
+        self._checksum = parse_checksum_type(checksum)
         self.protocol = ZDTProtocol(self.checksum)
-        self.default_timeout_s = float(default_timeout_s)
+        self._default_timeout_s = float(default_timeout_s)
         self.trace_callback = trace_callback
         self._pending = {}
         self._assemblies = {}
-        self._events = queue.Queue()
+        self._events = queue.Queue(maxsize=event_queue_size)
+        self._dropped_event_count = 0
         self._lock = threading.RLock()
         self._send_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._receiver_thread = None
         self._receiver_error = None
         self._last_protocol_error = None
+
+    @property
+    def checksum(self):
+        """
+        @description         : 获取当前总线使用的ZDT校验方式
+        @param               : 无参数
+        @return              : ChecksumType枚举值
+        """
+        return self._checksum
+
+    @property
+    def default_timeout_s(self):
+        """
+        @description         : 获取当前总线默认请求超时时间
+        @param               : 无参数
+        @return              : 超时秒数
+        """
+        return self._default_timeout_s
+
+    @property
+    def dropped_event_count(self):
+        """
+        @description         : 获取当前总线对象累计丢弃的异步事件数量
+        @param               : 无参数
+        @return              : 累计丢弃事件数量
+        """
+        return self._dropped_event_count
 
     @property
     def kind(self):
@@ -514,7 +553,7 @@ class ZDTCanBus(ZDTMotorBus):
 
     def _put_event(self, response):
         """
-        @description         : 非阻塞投递异步电机事件并保护接收线程
+        @description         : 非阻塞投递异步事件，队列满时丢弃最旧事件
         @param response      : 已校验的ZDTResponse
         @return              : 成功投递返回True，队列已满返回False
         """
@@ -522,7 +561,17 @@ class ZDTCanBus(ZDTMotorBus):
             self._events.put_nowait(response)
             return True
         except queue.Full:
-            return False
+            try:
+                self._events.get_nowait()
+            except queue.Empty:
+                pass
+            else:
+                self._dropped_event_count += 1
+            try:
+                self._events.put_nowait(response)
+                return True
+            except queue.Full:
+                return False
 
     def _expire_assemblies(self):
         """

@@ -32,6 +32,24 @@ class ZDTMotorBus(ABC):
         @return              : 端点对象
         """
 
+    @property
+    @abstractmethod
+    def checksum(self):
+        """
+        @description         : 返回当前总线使用的ZDT校验方式
+        @param               : 无参数
+        @return              : ChecksumType枚举值
+        """
+
+    @property
+    @abstractmethod
+    def default_timeout_s(self):
+        """
+        @description         : 返回当前总线默认请求超时时间
+        @param               : 无参数
+        @return              : 超时秒数
+        """
+
     @abstractmethod
     def open(self):
         """
@@ -65,4 +83,3 @@ class ZDTMotorBus(ABC):
         @param               : 无参数
         @return              : 只包含基础数据类型的字典
         """
-
