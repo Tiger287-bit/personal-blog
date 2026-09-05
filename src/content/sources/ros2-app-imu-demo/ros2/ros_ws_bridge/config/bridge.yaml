@@ -1,0 +1,21 @@
+websocket:
+  uri: "ws://127.0.0.1:8765/ros"
+  reconnect_delay_s: 1.0
+  max_message_bytes: 16384
+
+topics:
+  - topic: "/bridge/demo_text_to_app"
+    ros_type: "std_msgs/msg/String"
+    direction: "ros_to_ws"
+
+  - topic: "/bridge/demo_text_from_app"
+    ros_type: "std_msgs/msg/String"
+    direction: "ws_to_ros"
+
+  - topic: "/bridge/demo_array_to_app"
+    ros_type: "std_msgs/msg/UInt8MultiArray"
+    direction: "ros_to_ws"
+
+  - topic: "/bridge/demo_array_from_app"
+    ros_type: "std_msgs/msg/UInt8MultiArray"
+    direction: "ws_to_ros"

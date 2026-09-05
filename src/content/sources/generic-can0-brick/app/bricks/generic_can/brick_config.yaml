@@ -1,0 +1,14 @@
+id: generic_can
+name: Generic CAN
+description: Protocol-neutral Standard, Extended, Classical CAN, and CAN FD frame I/O over Linux SocketCAN.
+category: miscellaneous
+supported_boards:
+  - ventunoq
+ports: []
+variables:
+  - name: GENERIC_CAN_INTERFACE
+    default_value: "can0"
+  - name: GENERIC_CAN_RAW_QUEUE_SIZE
+    default_value: "256"
+  - name: GENERIC_CAN_MESSAGE_QUEUE_SIZE
+    default_value: "64"

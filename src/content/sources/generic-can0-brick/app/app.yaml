@@ -1,0 +1,10 @@
+name: Generic CAN0 Lab
+description: Learn raw and named CAN messaging through a reusable Generic CAN Brick on VENTUNO Q can0.
+icon: 🚌
+ports: []
+bricks:
+  - generic_can:
+      variables:
+        GENERIC_CAN_INTERFACE: "can0"
+        GENERIC_CAN_RAW_QUEUE_SIZE: "256"
+        GENERIC_CAN_MESSAGE_QUEUE_SIZE: "64"

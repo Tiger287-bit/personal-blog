@@ -1,0 +1,11 @@
+profiles:
+  default:
+    platforms:
+      - platform: arduino:zephyr
+    libraries:
+      - dir: ./lib/Bno086Imu
+      - dir: ./lib/Adafruit_BNO08x_Ventuno
+      - Adafruit BusIO (1.17.4)
+      - Adafruit Unified Sensor (1.1.15)
+
+default_profile: default

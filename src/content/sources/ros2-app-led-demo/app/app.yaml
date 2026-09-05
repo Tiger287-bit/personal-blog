@@ -1,0 +1,14 @@
+name: my-ros2-02-led-demo
+description: Control four binary LED groups from ROS 2 through App Lab.
+icon: 💡
+ports: []
+bricks:
+  - websocket_server:
+      variables:
+        WEBSOCKET_SERVER_HOST: "0.0.0.0"
+        WEBSOCKET_SERVER_PORT: "8765"
+        WEBSOCKET_SERVER_PATH: "/ros"
+        WEBSOCKET_SERVER_MAX_MESSAGE_BYTES: "16384"
+        WEBSOCKET_SERVER_MAX_CLIENTS: "4"
+        WEBSOCKET_SERVER_PING_INTERVAL_S: "10"
+        WEBSOCKET_SERVER_PING_TIMEOUT_S: "10"

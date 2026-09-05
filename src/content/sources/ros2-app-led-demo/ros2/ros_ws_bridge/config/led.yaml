@@ -1,0 +1,17 @@
+websocket:
+  uri: "ws://127.0.0.1:8765/ros"
+  reconnect_delay_s: 1.0
+  max_message_bytes: 16384
+
+topics:
+  - topic: "/my_ros2_02/led_command"
+    ros_type: "std_msgs/msg/UInt8MultiArray"
+    direction: "ros_to_ws"
+
+  - topic: "/my_ros2_02/led_state"
+    ros_type: "std_msgs/msg/UInt8MultiArray"
+    direction: "ws_to_ros"
+
+  - topic: "/my_ros2_02/error"
+    ros_type: "std_msgs/msg/String"
+    direction: "ws_to_ros"

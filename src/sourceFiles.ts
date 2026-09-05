@@ -37,8 +37,11 @@ interface MutableSourceFile {
 type MutableSourceNode = MutableSourceDirectory | MutableSourceFile;
 
 const sourceTextModules = import.meta.glob<string>([
-	'./content/sources/**/*.{cfg,cpp,h,ino,js,json,md,py,sh,txt,xml,yaml,yml}',
+	'./content/sources/**/*.{c,cfg,cpp,h,ino,js,json,md,properties,py,sh,txt,xml,yaml,yml}',
 	'./content/sources/**/.gitignore',
+	'./content/sources/**/LICENSE',
+	'./content/sources/**/Doxyfile',
+	'./content/sources/**/resource/*',
 ], {
 	query: '?raw',
 	import: 'default',
@@ -57,6 +60,7 @@ const sourceAssetModules = import.meta.glob<string>([
 });
 
 const languageByExtension: Record<string, string> = {
+	c: 'C',
 	cfg: 'Config',
 	cpp: 'C++',
 	h: 'C++ Header',
@@ -64,6 +68,7 @@ const languageByExtension: Record<string, string> = {
 	js: 'JavaScript',
 	json: 'JSON',
 	md: 'Markdown',
+	properties: 'Properties',
 	py: 'Python',
 	sh: 'Shell',
 	txt: 'Text',
@@ -75,6 +80,7 @@ const languageByExtension: Record<string, string> = {
 };
 
 const highlighterLanguageByExtension: Record<string, string> = {
+	c: 'c',
 	cfg: 'ini',
 	cpp: 'cpp',
 	h: 'cpp',
@@ -82,6 +88,7 @@ const highlighterLanguageByExtension: Record<string, string> = {
 	js: 'javascript',
 	json: 'json',
 	md: 'markdown',
+	properties: 'ini',
 	py: 'python',
 	sh: 'bash',
 	txt: 'text',

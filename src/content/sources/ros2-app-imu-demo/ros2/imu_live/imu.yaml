@@ -1,0 +1,13 @@
+websocket:
+  uri: ws://127.0.0.1:8765/ros
+  reconnect_delay_s: 1.0
+  max_message_bytes: 16384
+
+topics:
+  - topic: /imu/data
+    ros_type: sensor_msgs/msg/Imu
+    direction: ws_to_ros
+
+  - topic: /imu/status
+    ros_type: std_msgs/msg/String
+    direction: ws_to_ros

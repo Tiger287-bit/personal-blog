@@ -1,0 +1,8 @@
+id: bno086_imu
+name: BNO086 IMU
+description: Read-only BNO086 snapshots from the Ventuno Q MCU RouterBridge API.
+category: miscellaneous
+supported_boards:
+  - ventunoq
+ports: []
+variables: []

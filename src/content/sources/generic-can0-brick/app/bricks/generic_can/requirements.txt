@@ -1,0 +1,5 @@
+--no-index
+./bricks/generic_can/vendor/packaging-26.3-py3-none-any.whl
+./bricks/generic_can/vendor/typing_extensions-4.16.0-py3-none-any.whl
+./bricks/generic_can/vendor/wrapt-1.17.3-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
+./bricks/generic_can/vendor/python_can-4.6.1-py3-none-any.whl
