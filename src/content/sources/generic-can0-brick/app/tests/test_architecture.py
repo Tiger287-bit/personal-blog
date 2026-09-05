@@ -4,9 +4,22 @@ import ast
 from pathlib import Path
 import unittest
 
+import generic_can
+
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 BRICK_ROOT = APP_ROOT / "bricks" / "generic_can"
+EXPECTED_PUBLIC_API = {
+    "CanBus",
+    "CanFrame",
+    "MessageDefinition",
+    "CANError",
+    "CANConfigurationError",
+    "CANBackendError",
+    "CANTimeoutError",
+    "CANMessageError",
+    "CANUnsupportedFeatureError",
+}
 
 
 class ArchitectureTests(unittest.TestCase):
@@ -63,7 +76,14 @@ class ArchitectureTests(unittest.TestCase):
                         )
         self.assertEqual(missing, [])
 
+    def test_public_api_exactly_matches_v1_contract(self):
+        """
+        @description         : 锁定Generic CAN V1根包的稳定公开名称集合
+        @param self          : 当前测试用例
+        @return              : 无
+        """
+        self.assertEqual(set(generic_can.__all__), EXPECTED_PUBLIC_API)
+
 
 if __name__ == "__main__":
     unittest.main()
-

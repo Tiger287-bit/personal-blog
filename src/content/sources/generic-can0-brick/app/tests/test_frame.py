@@ -59,6 +59,49 @@ class CanFrameTests(unittest.TestCase):
         with self.assertRaises(CANConfigurationError):
             CanFrame(1, bitrate_switch=True)
 
+    def test_can_fd_accepts_only_valid_dlc_payload_lengths(self):
+        """
+        @description         : 验证CAN FD只接受能够直接对应DLC的DATA长度
+        @param self          : 当前测试用例
+        @return              : 无
+        """
+        valid_lengths = (
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            12,
+            16,
+            20,
+            24,
+            32,
+            48,
+            64,
+        )
+        for length in valid_lengths:
+            with self.subTest(length=length):
+                self.assertEqual(
+                    len(CanFrame(1, bytes(length), is_fd=True).data),
+                    length,
+                )
+
+    def test_can_fd_rejects_non_dlc_payload_lengths(self):
+        """
+        @description         : 验证CAN FD拒绝不能直接对应DLC的DATA长度
+        @param self          : 当前测试用例
+        @return              : 无
+        """
+        invalid_lengths = (9, 10, 11, 13, 15, 17, 31, 33, 47, 49, 63, 65)
+        for length in invalid_lengths:
+            with self.subTest(length=length):
+                with self.assertRaises(CANConfigurationError):
+                    CanFrame(1, bytes(length), is_fd=True)
+
     def test_normalizes_mutable_payload(self):
         """
         @description         : 验证可变字节序列会被复制成不可变bytes

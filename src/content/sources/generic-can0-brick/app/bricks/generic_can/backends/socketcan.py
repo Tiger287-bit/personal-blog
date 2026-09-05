@@ -131,9 +131,12 @@ class SocketCANBackend(CanBackend):
         deadline = time.monotonic() + timeout
 
         while True:
-            remaining = max(0.0, deadline - time.monotonic())
             if timeout == 0.0:
                 remaining = 0.0
+            else:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.0:
+                    return None
             try:
                 message = bus.recv(timeout=remaining)
             except Exception as error:

@@ -72,6 +72,13 @@ class CanBus:
             raise CANConfigurationError(
                 "backend must implement the CanBackend contract"
             )
+        if (
+            isinstance(backend, SocketCANBackend)
+            and backend.device != self.interface
+        ):
+            raise CANConfigurationError(
+                "SocketCAN backend device does not match CanBus interface"
+            )
         self._backend = backend
         self._messages = self._validate_messages(messages)
 
@@ -331,14 +338,15 @@ class CanBus:
                 )
 
             close_error = None
-            try:
-                self._backend.close()
-            except CANError as error:
-                close_error = error
-            except Exception as error:
-                close_error = CANBackendError(
-                    f"failed to close CAN bus '{self.interface}': {error}"
-                )
+            with self._send_lock:
+                try:
+                    self._backend.close()
+                except CANError as error:
+                    close_error = error
+                except Exception as error:
+                    close_error = CANBackendError(
+                        f"failed to close CAN bus '{self.interface}': {error}"
+                    )
 
             if receiver_thread is not None and receiver_thread.is_alive():
                 receiver_thread.join(timeout=0.25)
@@ -544,7 +552,9 @@ class CanBus:
                 "payload_source": (
                     "fixed_data"
                     if definition.fixed_data is not None
-                    else "encode"
+                    else (
+                        "encode" if definition.encode is not None else None
+                    )
                 ),
                 "has_decode": definition.decode is not None,
             }

@@ -2,7 +2,12 @@
 
 import unittest
 
-from can_messages import MESSAGES, decode_motor_status, encode_motor_speed
+from can_messages import (
+    MESSAGES,
+    decode_motor_status,
+    encode_fd_bytes,
+    encode_motor_speed,
+)
 
 
 class CustomMessageTests(unittest.TestCase):
@@ -46,7 +51,23 @@ class CustomMessageTests(unittest.TestCase):
         self.assertTrue(MESSAGES["fd_payload"].is_fd)
         self.assertTrue(MESSAGES["fd_payload"].bitrate_switch)
 
+    def test_fd_example_rejects_integer_text_and_bool_payloads(self):
+        """
+        @description         : 验证FD示例不会把整数或文本静默转换成零字节
+        @param self          : 当前测试用例
+        @return              : 无
+        """
+        self.assertEqual(encode_fd_bytes(b"\x01\x02"), b"\x01\x02")
+        self.assertEqual(
+            encode_fd_bytes(bytearray([1, 2])),
+            b"\x01\x02",
+        )
+        self.assertEqual(encode_fd_bytes([1, 2]), b"\x01\x02")
+        for payload in (2, True, "0102"):
+            with self.subTest(payload=payload):
+                with self.assertRaises(ValueError):
+                    encode_fd_bytes(payload)
+
 
 if __name__ == "__main__":
     unittest.main()
-

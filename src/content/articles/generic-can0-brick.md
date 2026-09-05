@@ -134,7 +134,7 @@ from generic_can import CanBus, CanFrame, MessageDefinition
 | `send_frame(frame)` | 发送一帧原始 CAN 数据 |
 | `receive_frame(timeout_s)` | 读取下一帧原始数据，超时返回 `None` |
 | `send(name, **values)` | 编码并发送一条命名报文 |
-| `receive(name, timeout_s)` | 等待并解码一条命名报文 |
+| `receive(name, timeout_s)` | 从命名FIFO队列读取下一条待消费报文并解码 |
 | `describe()` | 查看配置、线程、队列和丢帧统计 |
 
 ## CanFrame 参数规则
@@ -157,10 +157,13 @@ frame = CanFrame(
 | --- | --- | --- |
 | Standard Classical CAN | `0x000`～`0x7FF` | 0～8 字节 |
 | Extended Classical CAN | `0x00000000`～`0x1FFFFFFF` | 0～8 字节 |
-| CAN FD | 根据 Standard/Extended 选择 | 0～64 字节 |
+| CAN FD | 根据 Standard/Extended 选择 | `0～8、12、16、20、24、32、48、64` 字节 |
 
 `bitrate_switch=True` 只允许用于 CAN FD。字符串和整数不能直接作为 DATA，避免整数 `2`
 被 Python 意外转换成两个零字节；需要先明确构造 `bytes`。
+
+CAN FD 长度必须能够直接对应 DLC。协议只有 9 个有意义字节时，应按照该协议规定的填充值
+和位置显式补齐到 12 字节，不能让 Backend 隐式处理。
 
 ## 在 can_messages.py 中定义报文
 
@@ -341,12 +344,17 @@ with CanBus(interface="can0", messages=MESSAGES) as bus:
 ```
 
 Generic CAN 没有统一的设备地址、功能码、ACK 或事务 ID，因此不实现通用 `request()`。
-需要“发送 A 后等待 B”时，由业务层明确写成两步：
+如果业务代码需要“发送一帧，然后读取某个命名队列中的下一帧”，可以写成两步：
 
 ```python
 bus.send("request_status")
 status = bus.receive("status", timeout_s=1.0)
 ```
+
+这两行不是 request-response 关联。`receive("status")` 只从 `status` 的 FIFO 队列中取出
+下一条尚未消费的帧；如果旧 `status` 在发送前已经进入队列，它就可能先被返回。设备协议
+提供 sequence number、transaction ID、counter 或请求/响应功能码时，应由协议层或业务
+代码根据这些字段完成关联。
 
 ## Standard、Extended 与 CAN FD
 
@@ -453,6 +461,38 @@ except CANError as error:
 离线 wheel 已完整保存在 `bricks/generic_can/vendor/`。开发板不需要访问 PyPI，也不依赖
 另一个 App 的虚拟环境。
 
+## V1 可靠性契约
+
+这个版本对以下行为作出明确保证：
+
+| 场景 | V1 行为 |
+| --- | --- |
+| 发送过程中调用 `close()` | 等待当前发送结束，再关闭 SocketCAN Backend |
+| `CanBus(interface="can0")` 配合显式 SocketCAN Backend | Backend 的 `device` 必须同样是 `can0`，否则创建对象时立即报错 |
+| CAN FD DATA 长度 | 只接受能够直接对应 DLC 的长度，不依赖 Backend 隐式补齐 |
+| 接收错误帧或远程帧 | 忽略这些帧，但不会因此延长调用者指定的 timeout |
+| 纯接收报文的 `describe()` 结果 | `payload_source` 为 `None`，不会错误显示为 `encode` |
+| 原始队列或命名队列已满 | 丢弃最旧帧，保留最新帧，并累计丢帧统计 |
+
+V1 的公开 API 固定为：
+
+```python
+from generic_can import (
+    CANBackendError,
+    CANConfigurationError,
+    CANError,
+    CANMessageError,
+    CANTimeoutError,
+    CANUnsupportedFeatureError,
+    CanBus,
+    CanFrame,
+    MessageDefinition,
+)
+```
+
+`SocketCANBackend`、`CanBackend` 和内部辅助函数不是稳定公共 API。具体设备协议如果需要
+请求与响应关联，应在 `generic_can` 之上另建协议 Brick，不要依赖内部实现。
+
 ## 运行不依赖硬件的测试
 
 `FakeBackend` 单元测试不会打开 `can0`，也不会发送真实 CAN 报文：
@@ -462,16 +502,17 @@ cd /home/arduino/ArduinoApps/generic-can0-lab
 bash tests/run.sh
 ```
 
-开发板上的实际结果：
+当前仓库的实际测试结果：
 
 ```text
-Ran 41 tests in 0.195s
+Ran 49 tests
 
 OK
 ```
 
-这些测试覆盖 ID 和 DATA 边界、CAN FD/BRS、报文定义、编解码、timeout、并发打开、并发
-发送、单接收线程、Raw/Named 队列、队列溢出、错误传播和 SocketCAN 字段映射。
+这些测试覆盖 ID 和 DATA 边界、严格 CAN FD DLC 长度、报文定义、编解码、timeout、
+关闭与发送同步、接口一致性、并发打开、并发发送、单接收线程、Raw/Named 队列、队列
+溢出、诊断字段、Public API 契约、错误传播和 SocketCAN 字段映射。
 
 最终源码也在开发板执行了：
 
@@ -509,7 +550,6 @@ bash scripts/run_host_python.sh scripts/can_monitor.py --interface can0
 
 ## 当前验证结论
 
-当前版本已经通过 41 项 FakeBackend 单元测试和 Python `compileall`，Arduino App CLI 能够
+当前版本已经通过 49 项 FakeBackend 单元测试和 Python `compileall`，Arduino App CLI 能够
 识别 `user:generic-can0-lab`。测试时 App 尚未启动，开发板 `can0` 为 `DOWN/STOPPED`，
 因此本文不把真实 CAN、真实设备通信或 CAN FD 标记为已验证。
-

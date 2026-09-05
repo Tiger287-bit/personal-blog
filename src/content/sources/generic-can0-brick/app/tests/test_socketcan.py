@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from generic_can import CANBackendError, CanFrame
 from generic_can.backends import SocketCANBackend
@@ -18,6 +19,7 @@ class FakePythonCanBus:
         """
         self.sent = []
         self.receive_values = []
+        self.receive_timeouts = []
         self.shutdown_count = 0
 
     def send(self, message):
@@ -36,6 +38,7 @@ class FakePythonCanBus:
         @param timeout       : 后端传入的等待秒数
         @return              : 模拟Message或None
         """
+        self.receive_timeouts.append(timeout)
         if not self.receive_values:
             return None
         return self.receive_values.pop(0)
@@ -208,6 +211,32 @@ class SocketCANBackendTests(unittest.TestCase):
             ]
         )
         self.assertEqual(self.backend.receive(0).arbitration_id, 0x600)
+
+    def test_receive_timeout_still_expires_while_filtered_frames_arrive(self):
+        """
+        @description         : 验证错误帧和远程帧不会无限延长正数接收超时
+        @param self          : 当前测试用例
+        @return              : 无
+        """
+        self.backend.open()
+        self.can_module.bus.receive_values.extend(
+            [
+                incoming_message(is_error_frame=True),
+                incoming_message(is_remote_frame=True),
+                incoming_message(is_error_frame=True),
+            ]
+        )
+        with patch(
+            "generic_can.backends.socketcan.time.monotonic",
+            side_effect=(10.0, 10.001, 10.002, 10.006),
+        ):
+            self.assertIsNone(self.backend.receive(0.005))
+
+        self.assertEqual(len(self.can_module.bus.receive_timeouts), 2)
+        self.assertGreater(self.can_module.bus.receive_timeouts[0], 0.0)
+        self.assertGreater(self.can_module.bus.receive_timeouts[1], 0.0)
+        self.assertEqual(self.backend.ignored_error_frames, 1)
+        self.assertEqual(self.backend.ignored_remote_frames, 1)
 
     def test_close_is_idempotent(self):
         """

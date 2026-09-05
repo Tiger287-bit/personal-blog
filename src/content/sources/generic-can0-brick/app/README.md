@@ -71,6 +71,10 @@ ip -details -statistics link show can0
 
 `CanBus(interface="can1")`、`CanBus(interface="vcan0")` 等接口名也可以使用；V1 在 VENTUNO Q 上的正式目标和默认值仍是 `can0`。
 
+正常使用时，`CanBus` 会根据 `interface` 创建相同设备名的 `SocketCANBackend`。高级用户如果
+手动注入 `SocketCANBackend`，它的 `device` 必须与 `CanBus.interface` 完全一致；不一致会
+在打开接口前抛出 `CANConfigurationError`，避免诊断信息显示 `can0`、实际却操作 `can1`。
+
 ## 3. 两种使用方式
 
 ### 原始 CAN 帧
@@ -110,7 +114,9 @@ with CanBus(interface="can0", messages=MESSAGES) as bus:
     print(status)
 ```
 
-命名接收超时会抛出 `CANTimeoutError`，便于业务代码区分“暂时没有原始帧”和“等待指定反馈失败”。
+`receive("status")` 的准确含义是：从 `status` 的 FIFO 队列中取出下一条尚未被消费的帧。
+它不会判断这条帧是不是前一条 `send()` 引起的；调用发送之前已经进入队列的旧帧，也可能
+被下一次 `receive()` 取出。命名接收超时会抛出 `CANTimeoutError`。
 
 ## 4. 只修改 can_messages.py 定义协议
 
@@ -198,7 +204,14 @@ CanFrame(0x123456, b"\xA5", is_extended=True)
 
 合法范围是 `0x00000000`～`0x1FFFFFFF`。
 
-Classical CAN 默认最多 8 字节。CAN FD 数据结构最多 64 字节：
+Classical CAN 默认允许 0～8 字节。CAN FD 只允许能够直接对应 DLC 的长度：
+
+```text
+0、1、2、3、4、5、6、7、8、12、16、20、24、32、48、64
+```
+
+例如 9、10 和 11 字节都不合法。如果协议只有 9 个有意义字节，应根据协议明确规定的
+填充值和位置，将 DATA 补齐到 12 字节；不能依赖 Backend 隐式补齐。
 
 ```python
 CanFrame(
@@ -287,6 +300,14 @@ cd /home/arduino/ArduinoApps/generic-can0-lab
 bash tests/run.sh
 ```
 
+V1 冻结前回归测试的正常结尾是：
+
+```text
+Ran 49 tests
+
+OK
+```
+
 只读监视真实接口不会发送报文：
 
 ```bash
@@ -328,12 +349,17 @@ V1 正式实现：SocketCAN 数据帧、标准/扩展 ID、Classical CAN、基�
 
 V1 不实现：UART、TTL、RS485、Bridge UART/CAN、CANopen、J1939、Modbus、DBC、ARXML、UDS、ISO-TP、自动扫描、自动配置 bitrate、自动执行 `ip link`、过滤器、订阅回调、周期发送、request-response、各种 Factory。
 
-需要“发送 A 后等待 B”时，在业务层明确写两步：
+如果业务代码需要“发送一帧，然后读取某个命名队列中的下一帧”，可以明确写成两步：
 
 ```python
 bus.send("request_status")
 status = bus.receive("status", timeout_s=1.0)
 ```
 
-Generic CAN 层不知道设备地址、功能码、ACK 或事务 ID，因此不提供容易造成错误关联的通用 `request()`。
+这两行不是 request-response 关联。接收线程始终在后台运行，`status` 队列可能已经保存了
+发送前收到的旧帧，因此 `receive("status")` 可能返回旧状态。Generic CAN 层不知道设备
+地址、功能码、ACK 或事务 ID，所以不能判断某帧是否由某次发送产生，也不会提供容易造成
+错误关联的通用 `request()`。
 
+如果设备协议提供 sequence number、transaction ID、counter、请求功能码或响应功能码，
+应由设备协议层或业务代码根据这些字段完成关联。

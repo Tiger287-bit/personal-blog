@@ -23,6 +23,11 @@ class FakeBackend(CanBackend):
         self._receive_queue = queue.Queue()
         self._lock = threading.Lock()
         self._is_open = False
+        self.send_entered = threading.Event()
+        self.release_send = threading.Event()
+        self.release_send.set()
+        self.close_called = threading.Event()
+        self.operation_log = []
 
     def open(self):
         """
@@ -42,9 +47,17 @@ class FakeBackend(CanBackend):
         @return              : 无
         """
         with self._lock:
-            if not self._is_open:
-                raise CANBackendError("fake backend is not open")
+            is_open = self._is_open
+        if not is_open:
+            raise CANBackendError("fake backend is not open")
+
+        self.send_entered.set()
+        if not self.release_send.wait(timeout=2.0):
+            raise CANBackendError("fake send release timed out")
+
+        with self._lock:
             self.sent_frames.append(frame)
+            self.operation_log.append("send_finished")
 
     def receive(self, timeout_s):
         """
@@ -69,7 +82,9 @@ class FakeBackend(CanBackend):
         @param self          : 当前FakeBackend对象
         @return              : 无
         """
+        self.close_called.set()
         with self._lock:
+            self.operation_log.append("close_called")
             self.close_count += 1
             self._is_open = False
 
@@ -90,4 +105,3 @@ class FakeBackend(CanBackend):
         @return              : 无
         """
         self._receive_queue.put(error)
-

@@ -55,6 +55,10 @@ def encode_fd_bytes(payload):
     @param payload       : 长度不超过64的字节兼容对象
     @return              : 不可变bytes
     """
+    if isinstance(payload, (str, int)):
+        raise ValueError(
+            "payload must be bytes-compatible, not text or an integer"
+        )
     return bytes(payload)
 
 

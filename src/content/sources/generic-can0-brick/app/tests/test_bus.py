@@ -7,12 +7,14 @@ import unittest
 from fake_backend import FakeBackend
 from generic_can import (
     CANBackendError,
+    CANConfigurationError,
     CANMessageError,
     CANTimeoutError,
     CanBus,
     CanFrame,
     MessageDefinition,
 )
+from generic_can.backends import SocketCANBackend
 
 
 def wait_until(predicate, timeout_s=1.0):
@@ -304,6 +306,92 @@ class CanBusTests(unittest.TestCase):
             thread.join()
         self.assertEqual(len(self.backend.sent_frames), 20)
         self.assertEqual(test_bus.sent_frames, 20)
+
+    def test_close_waits_for_active_send_before_backend_close(self):
+        """
+        @description         : 验证close等待正在执行的send释放同一把发送锁
+        @param self          : 当前测试用例
+        @return              : 无
+        """
+        test_bus = self.make_bus().open()
+        self.backend.release_send.clear()
+        send_errors = []
+        close_errors = []
+
+        def run_send():
+            """
+            @description         : 在线程中执行一帧可控阻塞发送
+            @param               : 无
+            @return              : 无
+            """
+            try:
+                test_bus.send_frame(CanFrame(0x123, b"\x01"))
+            except Exception as error:
+                send_errors.append(error)
+
+        def run_close():
+            """
+            @description         : 在线程中关闭同一个CanBus并收集异常
+            @param               : 无
+            @return              : 无
+            """
+            try:
+                test_bus.close()
+            except Exception as error:
+                close_errors.append(error)
+
+        sender = threading.Thread(target=run_send)
+        closer = threading.Thread(target=run_close)
+        try:
+            sender.start()
+            self.assertTrue(self.backend.send_entered.wait(timeout=0.5))
+            closer.start()
+            self.assertFalse(self.backend.close_called.wait(timeout=0.1))
+            self.assertTrue(closer.is_alive())
+        finally:
+            self.backend.release_send.set()
+
+        sender.join(timeout=1.0)
+        closer.join(timeout=1.0)
+        self.assertFalse(sender.is_alive())
+        self.assertFalse(closer.is_alive())
+        self.assertEqual(send_errors, [])
+        self.assertEqual(close_errors, [])
+        self.assertEqual(
+            self.backend.operation_log,
+            ["send_finished", "close_called"],
+        )
+
+    def test_socketcan_backend_device_must_match_bus_interface(self):
+        """
+        @description         : 验证CanBus显示接口与SocketCAN实际设备不能错配
+        @param self          : 当前测试用例
+        @return              : 无
+        """
+        backend = SocketCANBackend(device="can1")
+        with self.assertRaisesRegex(
+            CANConfigurationError,
+            "device does not match",
+        ):
+            CanBus(interface="can0", backend=backend)
+        self.assertFalse(backend.is_open)
+
+    def test_describe_rx_only_message_has_no_payload_source(self):
+        """
+        @description         : 验证纯接收报文不会被诊断信息误报为使用encode
+        @param self          : 当前测试用例
+        @return              : 无
+        """
+        messages = {
+            "status": MessageDefinition(
+                0x301,
+                direction="rx",
+                decode=lambda data: data,
+            )
+        }
+        report = self.make_bus(messages=messages).describe()
+        self.assertIsNone(report["messages"]["status"]["payload_source"])
+        self.assertTrue(report["messages"]["status"]["has_decode"])
 
 
 if __name__ == "__main__":

@@ -8,6 +8,26 @@ from .config import validate_bool
 from .errors import CANConfigurationError
 
 
+CAN_FD_DATA_LENGTHS = frozenset({
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    12,
+    16,
+    20,
+    24,
+    32,
+    48,
+    64,
+})
+
+
 @dataclass(frozen=True)
 class CanFrame:
     """One validated Standard/Extended Classical CAN or CAN FD data frame."""
@@ -55,11 +75,14 @@ class CanFrame:
             ) from error
         object.__setattr__(self, "data", normalized_data)
 
-        maximum_length = 64 if self.is_fd else 8
-        if len(normalized_data) > maximum_length:
-            frame_kind = "CAN FD" if self.is_fd else "Classical CAN"
+        if self.is_fd and len(normalized_data) not in CAN_FD_DATA_LENGTHS:
             raise CANConfigurationError(
-                f"{frame_kind} data must contain 0..{maximum_length} bytes"
+                "CAN FD data length must be one of "
+                "0..8, 12, 16, 20, 24, 32, 48, or 64 bytes"
+            )
+        if not self.is_fd and len(normalized_data) > 8:
+            raise CANConfigurationError(
+                "Classical CAN data must contain 0..8 bytes"
             )
 
         if self.bitrate_switch and not self.is_fd:
